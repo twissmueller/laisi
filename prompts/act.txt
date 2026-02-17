@@ -1,0 +1,5 @@
+TODO: Act-Phase Prompt definieren
+
+Input: Check-Ergebnis (passed)
+Aufgabe: PR erstellen, Learnings dokumentieren, Rules/Skills updaten
+Output: act.xml mit PR-URL und dokumentierten Learnings

@@ -1,0 +1,5 @@
+TODO: Do-Phase Prompt definieren
+
+Input: Plan mit Datei-Liste und Änderungsbeschreibung
+Aufgabe: Code implementieren gemäß Plan
+Output: do.xml mit Liste geänderter Dateien und Zusammenfassung

@@ -1,0 +1,32 @@
+{
+  "name": "laisi",
+  "version": "0.1.0",
+  "description": "Let AI Supervise Itself – Issue-driven AI Development Pipeline",
+  "type": "module",
+  "bin": {
+    "laisi": "./dist/cli.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "prepublishOnly": "npm run build"
+  },
+  "files": [
+    "dist/",
+    "schemas/",
+    "prompts/"
+  ],
+  "dependencies": {
+    "fast-xml-parser": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": ["ai", "automation", "github", "issues", "claude", "requirements"],
+  "license": "MIT"
+}

@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <xs:element name="explore">
+    <xs:complexType>
+      <xs:sequence>
+
+        <!-- Meta -->
+        <xs:element name="meta">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="issue" type="xs:integer"/>
+              <xs:element name="title" type="xs:string"/>
+              <xs:element name="date" type="xs:dateTime"/>
+              <xs:element name="iteration" type="xs:integer"/>
+              <xs:element name="status">
+                <xs:simpleType>
+                  <xs:restriction base="xs:string">
+                    <xs:enumeration value="complete"/>
+                    <xs:enumeration value="needs_clarification"/>
+                    <xs:enumeration value="too_complex"/>
+                  </xs:restriction>
+                </xs:simpleType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Was will das Issue? Kurze Zusammenfassung -->
+        <xs:element name="context" type="xs:string"/>
+
+        <!-- Extrahierte Requirements -->
+        <xs:element name="requirements">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="requirement" minOccurs="0" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="id" type="xs:string"/>
+                    <xs:element name="title" type="xs:string"/>
+                    <xs:element name="description" type="xs:string"/>
+                    <xs:element name="rationale" type="xs:string"/>
+
+                    <!-- Konkret: wie wird geprüft ob erfüllt? -->
+                    <xs:element name="acceptance_criteria">
+                      <xs:complexType>
+                        <xs:sequence>
+                          <xs:element name="criterion" type="xs:string" maxOccurs="unbounded"/>
+                        </xs:sequence>
+                      </xs:complexType>
+                    </xs:element>
+
+                    <!-- Die 7 Quality Gates -->
+                    <xs:element name="quality_gates">
+                      <xs:complexType>
+                        <xs:sequence>
+                          <xs:element name="gate" maxOccurs="7" minOccurs="7">
+                            <xs:complexType>
+                              <xs:sequence>
+                                <xs:element name="name">
+                                  <xs:simpleType>
+                                    <xs:restriction base="xs:string">
+                                      <xs:enumeration value="atomic"/>
+                                      <xs:enumeration value="unambiguous"/>
+                                      <xs:enumeration value="testable"/>
+                                      <xs:enumeration value="complete"/>
+                                      <xs:enumeration value="consistent"/>
+                                      <xs:enumeration value="implementation_free"/>
+                                      <xs:enumeration value="traceable"/>
+                                    </xs:restriction>
+                                  </xs:simpleType>
+                                </xs:element>
+                                <xs:element name="passed" type="xs:boolean"/>
+                                <!-- Pflicht wenn passed=false -->
+                                <xs:element name="violation" type="xs:string" minOccurs="0"/>
+                              </xs:sequence>
+                            </xs:complexType>
+                          </xs:element>
+                        </xs:sequence>
+                      </xs:complexType>
+                    </xs:element>
+
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Begriffe die gegen die Blacklist verstoßen -->
+        <xs:element name="flagged_terms" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="term" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="original" type="xs:string"/>
+                    <xs:element name="context" type="xs:string"/>
+                    <xs:element name="suggestion" type="xs:string"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Offene Fragen an den Issue-Ersteller -->
+        <xs:element name="open_questions" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="question" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="text" type="xs:string"/>
+                    <xs:element name="reason" type="xs:string"/>
+                    <xs:element name="relates_to" type="xs:string"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Kontext-Übergabe an Plan-Phase -->
+        <xs:element name="handoff" type="xs:string"/>
+
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

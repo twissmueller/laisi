@@ -1,0 +1,5 @@
+TODO: Release-Phase Prompt definieren
+
+Input: Act-Ergebnis (PR merged)
+Aufgabe: Tag setzen, Changelog generieren, ggf. Deploy
+Output: release.xml mit Tag, Changelog-Entry, Deploy-Status

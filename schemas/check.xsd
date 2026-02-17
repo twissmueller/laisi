@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TODO: Check-Phase Schema definieren -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <xs:element name="check">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="meta">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="issue" type="xs:integer"/>
+              <xs:element name="date" type="xs:dateTime"/>
+              <xs:element name="iteration" type="xs:integer"/>
+              <xs:element name="status">
+                <xs:simpleType>
+                  <xs:restriction base="xs:string">
+                    <xs:enumeration value="passed"/>
+                    <xs:enumeration value="failed"/>
+                  </xs:restriction>
+                </xs:simpleType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- TODO: lint_results, test_results, security_scan, etc. -->
+        <xs:element name="handoff" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

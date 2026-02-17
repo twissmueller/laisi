@@ -1,0 +1,5 @@
+TODO: Plan-Phase Prompt definieren
+
+Input: Explore-Ergebnis mit validierten Requirements
+Aufgabe: Umsetzungsplan erstellen der in einer Claude-Session machbar ist
+Output: plan.xml mit Datei-Liste, Änderungsbeschreibung, Testplan

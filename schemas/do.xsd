@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- TODO: Do-Phase Schema definieren -->
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+
+  <xs:element name="do">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="meta">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="issue" type="xs:integer"/>
+              <xs:element name="date" type="xs:dateTime"/>
+              <xs:element name="iteration" type="xs:integer"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <!-- TODO: changed_files, test_results, etc. -->
+        <xs:element name="handoff" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+
+</xs:schema>

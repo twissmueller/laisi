@@ -1,0 +1,5 @@
+TODO: Check-Phase Prompt definieren
+
+Input: Do-Ergebnis + aktueller Code
+Aufgabe: Lint, Test, Security Scan, AI Code Review
+Output: check.xml mit Ergebnissen (passed/failed)
