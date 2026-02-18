@@ -119,9 +119,13 @@ export function parseClaudeTaskOutput(raw: string): string[] {
       .replace(/^\s*\d+\.\s+/, "")
       .trim();
 
-    if (cleaned.length > 0) {
-      tasks.push(cleaned);
-    }
+    if (cleaned.length === 0) continue;
+
+    // Einleitungssätze und Preamble filtern
+    if (cleaned.endsWith(":")) continue;
+    if (/^(based on|here are|basierend auf|hier sind|im folgenden|nachfolgend)/i.test(cleaned)) continue;
+
+    tasks.push(cleaned);
   }
 
   return tasks;

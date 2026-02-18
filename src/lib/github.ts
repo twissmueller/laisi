@@ -62,10 +62,14 @@ export function listAssignedIssues(): number[] {
 }
 
 export function fetchIssue(nr: number): GhIssue {
-  const raw = exec(
-    `gh issue view ${nr} --json title,body,comments,labels`,
-  );
-  return JSON.parse(raw);
+  try {
+    const raw = exec(
+      `gh issue view ${nr} --json title,body,comments,labels`,
+    );
+    return JSON.parse(raw);
+  } catch {
+    throw new Error(`Issue #${nr} nicht gefunden. Existiert es in diesem Repo?`);
+  }
 }
 
 export function commentOnIssue(nr: number, body: string): void {

@@ -22,5 +22,9 @@ ${NEW_COMMENTS}
 - Wenn kein neuer Task erkennbar ist, gib eine leere Antwort.
 
 ## Output-Format
-Gib NUR die Tasks aus, einen pro Zeile, ohne Prefix, ohne Nummerierung, ohne Checkboxen.
-Kein erklärender Text davor oder danach. Bei keinen neuen Tasks: leere Ausgabe.
+WICHTIG: Deine Antwort darf AUSSCHLIESSLICH Task-Zeilen enthalten.
+- Ein Task pro Zeile, im Imperativ
+- KEINE Einleitung ("Here are the tasks:", "Basierend auf...", etc.)
+- KEINE Zusammenfassung, KEINE Erklärungen
+- KEINE Nummerierung, KEINE Checkboxen, KEINE Bullet-Points
+- Bei keinen neuen Tasks: komplett leere Ausgabe

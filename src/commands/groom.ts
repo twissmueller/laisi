@@ -62,7 +62,13 @@ export async function groom(opts: GroomOptions): Promise<void> {
   for (const nr of issues) {
     log(`📋 Groom Issue #${nr}...`);
 
-    const issue = fetchIssue(nr);
+    let issue;
+    try {
+      issue = fetchIssue(nr);
+    } catch (e) {
+      log(`  ❌ ${(e as Error).message}`);
+      continue;
+    }
     const existingTasks = parseTasksSection(issue.body ?? "");
     const now = new Date().toISOString();
     const issueDir = ensureIssueDir(issuesDir, nr);
