@@ -58,7 +58,7 @@ switch (command) {
     break;
 
   case "groom":
-    await groom({ issueNumber: parseIssueFlag(), laisiHome: LAISI_HOME });
+    await groom({ dryRun: flags.has("--dry-run"), issueNumber: parseIssueFlag(), laisiHome: LAISI_HOME });
     break;
 
   case "help":
@@ -89,6 +89,7 @@ Usage:
   laisi init            Initialize .issues/ directory
   laisi groom           Extract tasks from issues into ## Tasks section
   laisi groom --issue=42  Groom a specific issue
+  laisi groom --dry-run   Show what groom would change without modifying issues
   laisi help            Show this help
 
 Each invocation executes exactly ONE step on the highest-priority

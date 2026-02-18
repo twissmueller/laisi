@@ -37,6 +37,7 @@ import { ensureIssueDir } from "../lib/state.js";
 
 export interface GroomOptions {
   issueNumber?: number;
+  dryRun: boolean;
   laisiHome: string;
 }
 
@@ -45,7 +46,8 @@ export async function groom(opts: GroomOptions): Promise<void> {
   const issuesDir = join(repoRoot, ".issues");
 
   initLogger(join(issuesDir, "orchestrator.log"));
-  log("═══ LAISI Groom ═══");
+  const dryRun = opts.dryRun;
+  log(dryRun ? "═══ LAISI Groom (dry-run) ═══" : "═══ LAISI Groom ═══");
 
   // ── Issues bestimmen ──
   const issues = opts.issueNumber
@@ -110,7 +112,7 @@ export async function groom(opts: GroomOptions): Promise<void> {
     // Folgelauf ohne neue Kommentare → nichts zu tun
     if (!isFirstRun && relevantComments.length === 0) {
       log(`  ⏭ Keine neuen Kommentare seit letztem Groom.`);
-      writeReport("no_new_comments", [], [], [], existingTasks.length);
+      if (!dryRun) writeReport("no_new_comments", [], [], [], existingTasks.length);
       continue;
     }
 
@@ -142,7 +144,7 @@ export async function groom(opts: GroomOptions): Promise<void> {
 
     if (incomingTasks.length === 0) {
       log("  ⚠️ Claude hat keine Tasks extrahiert.");
-      writeReport("no_new_tasks", groomComments, [], [], existingTasks.length);
+      if (!dryRun) writeReport("no_new_tasks", groomComments, [], [], existingTasks.length);
       continue;
     }
 
@@ -152,8 +154,18 @@ export async function groom(opts: GroomOptions): Promise<void> {
 
     if (added.length === 0) {
       log("  Keine neuen Tasks nach Deduplizierung.");
-      writeReport("no_new_tasks", groomComments, incomingTasks, [], existingTasks.length);
-      writeSyncState(issuesDir, nr, { lastGroomAt: now });
+      if (!dryRun) {
+        writeReport("no_new_tasks", groomComments, incomingTasks, [], existingTasks.length);
+        writeSyncState(issuesDir, nr, { lastGroomAt: now });
+      }
+      continue;
+    }
+
+    // ── Ergebnis anzeigen ──
+    if (dryRun) {
+      log(`  Would add ${added.length} task(s):`);
+      for (const t of added) log(`    + ${t}`);
+      log(`  Total: ${merged.length} tasks`);
       continue;
     }
 
@@ -164,8 +176,6 @@ export async function groom(opts: GroomOptions): Promise<void> {
     log(`  📝 Issue #${nr} Body aktualisiert.`);
 
     writeReport("updated", groomComments, incomingTasks, added, merged.length);
-
-    // Timestamp setzen
     writeSyncState(issuesDir, nr, { lastGroomAt: now });
   }
 
