@@ -2,6 +2,9 @@
  * GitHub CLI und Git Wrapper
  */
 import { execSync } from "node:child_process";
+import { writeFileSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 export function exec(cmd: string): string {
   return execSync(cmd, { encoding: "utf-8" }).trim();
@@ -78,6 +81,17 @@ export function hasNewCommentsSince(nr: number, sinceTimestamp: number): boolean
   if (!raw) return false;
   const commentTime = new Date(raw).getTime();
   return commentTime > sinceTimestamp;
+}
+
+export function updateIssueBody(nr: number, body: string): void {
+  // --body-file statt --body um Shell-Escaping-Probleme zu vermeiden
+  const tmpPath = join(tmpdir(), `laisi-issue-${nr}-${Date.now()}.md`);
+  writeFileSync(tmpPath, body);
+  try {
+    exec(`gh issue edit ${nr} --body-file "${tmpPath}"`);
+  } finally {
+    unlinkSync(tmpPath);
+  }
 }
 
 // ─── GitHub Pull Requests ───────────────────────────────────

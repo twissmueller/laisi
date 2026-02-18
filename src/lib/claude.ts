@@ -22,6 +22,17 @@ function callClaude(prompt: string): string {
   });
 }
 
+// ─── Claude aufrufen (plain: nur Output, getrimmt, exportiert) ──
+
+export function callClaudePlain(prompt: string): string {
+  const escaped = prompt.replace(/'/g, "'\\''");
+  return execSync(`claude --print '${escaped}'`, {
+    encoding: "utf-8",
+    maxBuffer: 10 * 1024 * 1024,
+    timeout: 5 * 60 * 1000,
+  }).trim();
+}
+
 // ─── Claude aufrufen (interaktiv: hat Repo-Zugriff, für Do-Phase) ──
 
 export function callClaudeInteractive(prompt: string): string {

@@ -34,6 +34,7 @@ import { runRelease } from "../phases/release.js";
 
 export interface RunOptions {
   dryRun: boolean;
+  issueNumber?: number;
   laisiHome: string;
 }
 
@@ -86,8 +87,18 @@ export async function run(opts: RunOptions): Promise<void> {
     }
 
     // ── 4. Beste Aktion auswählen ──
-    actions.sort((a, b) => a.priority - b.priority);
-    const best = actions[0];
+    let best: Action;
+    if (opts.issueNumber) {
+      const match = actions.find((a) => a.issueNumber === opts.issueNumber);
+      if (!match) {
+        log(`❌ Keine Aktion für Issue #${opts.issueNumber} gefunden.`);
+        return;
+      }
+      best = match;
+    } else {
+      actions.sort((a, b) => a.priority - b.priority || a.issueNumber - b.issueNumber);
+      best = actions[0];
+    }
 
     log(`🚀 #${best.issueNumber} → ${best.phase} (${best.reason})`);
 
