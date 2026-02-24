@@ -1,29 +1,147 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- TODO: Plan-Phase Schema definieren -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
 
   <xs:element name="plan">
     <xs:complexType>
       <xs:sequence>
+
+        <!-- Meta -->
         <xs:element name="meta">
           <xs:complexType>
             <xs:sequence>
               <xs:element name="issue" type="xs:integer"/>
+              <xs:element name="title" type="xs:string"/>
               <xs:element name="date" type="xs:dateTime"/>
               <xs:element name="iteration" type="xs:integer"/>
               <xs:element name="status">
                 <xs:simpleType>
                   <xs:restriction base="xs:string">
                     <xs:enumeration value="complete"/>
-                    <xs:enumeration value="waiting_for_human"/>
+                    <xs:enumeration value="too_complex"/>
                   </xs:restriction>
                 </xs:simpleType>
               </xs:element>
             </xs:sequence>
           </xs:complexType>
         </xs:element>
-        <!-- TODO -->
+
+        <!-- Zusammenfassung des Vorhabens -->
+        <xs:element name="context" type="xs:string"/>
+
+        <!-- Analyse der bestehenden Codebase -->
+        <xs:element name="codebase_analysis">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="tech_stack" type="xs:string"/>
+              <xs:element name="project_structure" type="xs:string"/>
+              <xs:element name="conventions" type="xs:string"/>
+              <xs:element name="test_framework" type="xs:string"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Betroffene Dateien -->
+        <xs:element name="files">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="file" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="path" type="xs:string"/>
+                    <xs:element name="action">
+                      <xs:simpleType>
+                        <xs:restriction base="xs:string">
+                          <xs:enumeration value="create"/>
+                          <xs:enumeration value="modify"/>
+                          <xs:enumeration value="delete"/>
+                        </xs:restriction>
+                      </xs:simpleType>
+                    </xs:element>
+                    <xs:element name="description" type="xs:string"/>
+                    <xs:element name="dependencies" minOccurs="0">
+                      <xs:complexType>
+                        <xs:sequence>
+                          <xs:element name="dependency" type="xs:string" maxOccurs="unbounded"/>
+                        </xs:sequence>
+                      </xs:complexType>
+                    </xs:element>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Testplan -->
+        <xs:element name="test_plan">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="test" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="requirement_id" type="xs:string"/>
+                    <xs:element name="type">
+                      <xs:simpleType>
+                        <xs:restriction base="xs:string">
+                          <xs:enumeration value="unit"/>
+                          <xs:enumeration value="integration"/>
+                          <xs:enumeration value="manual"/>
+                        </xs:restriction>
+                      </xs:simpleType>
+                    </xs:element>
+                    <xs:element name="file" type="xs:string"/>
+                    <xs:element name="description" type="xs:string"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Reihenfolge der Umsetzung -->
+        <xs:element name="execution_order">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="step" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="order" type="xs:integer"/>
+                    <xs:element name="file" type="xs:string"/>
+                    <xs:element name="action" type="xs:string"/>
+                    <xs:element name="description" type="xs:string"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Machbarkeitscheck -->
+        <xs:element name="feasibility">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="file_count" type="xs:integer"/>
+              <xs:element name="complexity">
+                <xs:simpleType>
+                  <xs:restriction base="xs:string">
+                    <xs:enumeration value="low"/>
+                    <xs:enumeration value="medium"/>
+                    <xs:enumeration value="high"/>
+                  </xs:restriction>
+                </xs:simpleType>
+              </xs:element>
+              <xs:element name="single_session" type="xs:boolean"/>
+              <xs:element name="concerns" type="xs:string"/>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Optional: nur bei too_complex -->
+        <xs:element name="too_complex_reason" type="xs:string" minOccurs="0"/>
+
+        <!-- Kontext-Uebergabe an Do-Phase -->
         <xs:element name="handoff" type="xs:string"/>
+
       </xs:sequence>
     </xs:complexType>
   </xs:element>

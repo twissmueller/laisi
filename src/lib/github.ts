@@ -73,9 +73,13 @@ export function fetchIssue(nr: number): GhIssue {
 }
 
 export function commentOnIssue(nr: number, body: string): void {
-  execSafe(
-    `gh issue comment ${nr} --body ${JSON.stringify(body)}`,
-  );
+  const tmpPath = join(tmpdir(), `laisi-comment-${nr}-${Date.now()}.md`);
+  writeFileSync(tmpPath, body);
+  try {
+    execSafe(`gh issue comment ${nr} --body-file "${tmpPath}"`);
+  } finally {
+    unlinkSync(tmpPath);
+  }
 }
 
 export function hasNewCommentsSince(nr: number, sinceTimestamp: number): boolean {

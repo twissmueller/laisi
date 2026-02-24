@@ -60,6 +60,8 @@ ${previousExplores}`;
   const result = await claudeWithValidation<{ explore: ExploreResult }>(
     prompt,
     outputPath,
+    "explore",
+    ctx.laisiHome,
   );
 
   if (!result.success || !result.data) {
@@ -71,17 +73,26 @@ ${previousExplores}`;
 
   switch (status) {
     case "needs_clarification": {
-      const questions = explore.openQuestions
-        ?.map((q) => `- ${q.text}`)
-        .join("\n") ?? "Keine Fragen extrahiert.";
+      // fast-xml-parser preserviert snake_case Tag-Namen aus dem XML
+      const rawQuestions = (explore as any).open_questions?.question as
+        | Array<{ text: string; reason: string; relates_to: string }>
+        | undefined;
+
+      if (!rawQuestions || rawQuestions.length === 0) {
+        throw new Error("status=needs_clarification but no open_questions in XML");
+      }
+
+      const questions = rawQuestions
+        .map((q) => `- ${q.text}`)
+        .join("\n");
 
       commentOnIssue(
         issueNr,
-        `🤖 **Explore-Phase (Iteration ${iter}): Rückfragen**\n\n${questions}\n\n_Bitte antworte hier im Issue._`,
+        `🤖 **Explore Phase (Iteration ${iter}): Open Questions**\n\n${questions}\n\n_Please reply here in the issue._`,
       );
 
       renameSync(outputPath, join(issueDir, `1-explore-${iter}.pending.xml`));
-      log(`  ⏳ Rückfragen gepostet, warte auf Antwort`);
+      log(`  ⏳ Open questions posted, waiting for reply`);
       break;
     }
 
@@ -92,14 +103,17 @@ ${previousExplores}`;
         | Array<{ title: string; body: string }>
         | undefined;
       const splits = rawSplits ?? [];
-      let body = `🤖 **Explore-Phase: Issue zu komplex**\n\nDieses Issue enthält mehrere unabhängige Features. Bitte in separate Issues aufteilen.\n`;
+      let body = `🤖 **Explore Phase: Suggested Split**
+
+This issue contains multiple independent features. I suggest splitting it into separate issues:
+`;
 
       if (splits.length > 0) {
-        body += `\n### Vorgeschlagene Aufteilung (${splits.length} Issues)\n`;
+        body += `\n### Proposed Split (${splits.length} Issues)\n`;
         for (const split of splits) {
           body += `\n<details>\n<summary><b>${split.title}</b></summary>\n\n${split.body}\n\n</details>\n`;
         }
-        body += `\n---\n_Erstelle die Issues manuell und schließe dieses Issue danach._`;
+        body += `\n---\n_Reply with **Yes** to proceed with the split. Or describe what you'd like changed._`;
       }
 
       commentOnIssue(issueNr, body);
@@ -123,7 +137,7 @@ ${previousExplores}`;
       const createdIssues: { number: number; url: string; title: string }[] = [];
 
       for (const split of splits) {
-        const body = `${split.body}\n\n---\n_Erstellt aus #${issueNr} (Split)_`;
+        const body = `${split.body}\n\n---\n_Created from #${issueNr} (split)_`;
         const created = createIssue(split.title, body);
         createdIssues.push({ ...created, title: split.title });
         log(`  📌 Sub-Issue #${created.number} erstellt: ${split.title}`);
@@ -135,11 +149,11 @@ ${previousExplores}`;
         .join("\n");
       commentOnIssue(
         issueNr,
-        `🤖 **Split abgeschlossen.** ${createdIssues.length} Sub-Issues erstellt:\n\n${links}`,
+        `🤖 **Split complete.** ${createdIssues.length} sub-issues created:\n\n${links}`,
       );
 
-      // Parent schließen
-      closeIssue(issueNr, `Aufgeteilt in ${createdIssues.length} Sub-Issues. Siehe Kommentar oben.`);
+      // Close parent
+      closeIssue(issueNr, `Split into ${createdIssues.length} sub-issues. See comment above.`);
 
       // Marker-Datei schreiben
       const splitMarker = {

@@ -27,9 +27,9 @@ um zu verstehen was korrigiert werden muss.
 | `2-plan-{N}.xml` | Plan vollständig und umsetzbar |
 | `2-plan-{N}.pending.xml` | Rückfrage an Menschen (optional) |
 
-**Schema:** `schemas/plan.xsd` (TODO: ausarbeiten)
-**Prompt-Template:** `prompts/plan.txt` (TODO: ausarbeiten)
-**Handler:** `src/phases/plan.ts` (TODO: implementieren)
+**Schema:** `schemas/plan.xsd`
+**Prompt-Template:** `prompts/plan.txt`
+**Handler:** `src/phases/plan.ts`
 
 ## Was mein Plan enthalten muss
 

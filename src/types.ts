@@ -123,10 +123,58 @@ export interface ExploreResult {
   handoff: string;
 }
 
-// ─── Plan-Phase Typen (TODO) ────────────────────────────────
+// ─── Plan-Phase Typen ───────────────────────────────────────
+
+export type PlanStatus = "complete" | "too_complex";
+
+export interface PlanFile {
+  path: string;
+  action: "create" | "modify" | "delete";
+  description: string;
+  dependencies?: string[];
+}
+
+export interface PlanTest {
+  requirement_id: string;
+  type: "unit" | "integration" | "manual";
+  file: string;
+  description: string;
+}
+
+export interface PlanStep {
+  order: number;
+  file: string;
+  action: string;
+  description: string;
+}
+
+export interface PlanFeasibility {
+  file_count: number;
+  complexity: "low" | "medium" | "high";
+  single_session: boolean;
+  concerns: string;
+}
 
 export interface PlanResult {
-  meta: { issue: number; date: string; iteration: number; status: string };
+  meta: {
+    issue: number;
+    title: string;
+    date: string;
+    iteration: number;
+    status: PlanStatus;
+  };
+  context: string;
+  codebase_analysis: {
+    tech_stack: string;
+    project_structure: string;
+    conventions: string;
+    test_framework: string;
+  };
+  files: PlanFile[];
+  test_plan: PlanTest[];
+  execution_order: PlanStep[];
+  feasibility: PlanFeasibility;
+  too_complex_reason?: string;
   handoff: string;
 }
 
