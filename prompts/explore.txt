@@ -149,9 +149,81 @@ geantwortet hat, werte sein Feedback aus:
 → Analysiere das Issue normal als ein Ganzes
 → Setze status = "complete" oder "needs_clarification" je nach Ergebnis
 
+## Output-Format (EXAKT einhalten!)
+
+Das Root-Element MUSS `<explore>` heißen. Hier die vollständige Struktur:
+
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<explore>
+  <meta>
+    <issue>42</issue>
+    <title>Issue-Titel</title>
+    <date>2026-02-24T00:00:00Z</date>
+    <iteration>1</iteration>
+    <status>complete</status>  <!-- complete | needs_clarification | too_complex | splits_confirmed -->
+  </meta>
+
+  <context>Kurze Zusammenfassung was das Issue will.</context>
+
+  <requirements>
+    <requirement>
+      <id>REQ-001</id>
+      <title>Kurzer Titel</title>
+      <description>Was genau gefordert wird.</description>
+      <rationale>Warum (aus dem Issue abgeleitet).</rationale>
+      <acceptance_criteria>
+        <criterion>Konkretes Akzeptanzkriterium 1</criterion>
+        <criterion>Konkretes Akzeptanzkriterium 2</criterion>
+      </acceptance_criteria>
+      <quality_gates>
+        <gate><name>atomic</name><passed>true</passed></gate>
+        <gate><name>unambiguous</name><passed>true</passed></gate>
+        <gate><name>testable</name><passed>true</passed></gate>
+        <gate><name>complete</name><passed>true</passed></gate>
+        <gate><name>consistent</name><passed>true</passed></gate>
+        <gate><name>implementation_free</name><passed>true</passed></gate>
+        <gate><name>traceable</name><passed>true</passed></gate>
+      </quality_gates>
+    </requirement>
+  </requirements>
+
+  <!-- Optional: nur bei Blacklist-Verstößen -->
+  <flagged_terms>
+    <term>
+      <original>schnell</original>
+      <context>Wo im Issue</context>
+      <suggestion>Konkreter Ersatz</suggestion>
+    </term>
+  </flagged_terms>
+
+  <!-- Optional: nur bei needs_clarification -->
+  <open_questions>
+    <question>
+      <text>Die Frage</text>
+      <reason>Warum sie gestellt wird</reason>
+      <relates_to>REQ-001</relates_to>
+    </question>
+  </open_questions>
+
+  <!-- Optional: nur bei too_complex oder splits_confirmed -->
+  <suggested_splits>
+    <split>
+      <title>Sub-Issue Titel</title>
+      <body>Markdown-Body für das GitHub Issue</body>
+      <requirement_ids><id>REQ-001</id></requirement_ids>
+    </split>
+  </suggested_splits>
+
+  <handoff>Max 5 Sätze für die Plan-Phase.</handoff>
+</explore>
+```
+
 ## WICHTIG
 - Gib NUR valides XML aus. Kein Text davor oder danach.
-- Beginne mit <?xml version="1.0" encoding="UTF-8"?>
+- Beginne mit `<?xml version="1.0" encoding="UTF-8"?>`
+- Das Root-Element MUSS `<explore>` heißen (NICHT `<requirements_analysis>` o.ä.)
+- Halte die Tag-Namen EXAKT wie oben ein (z.B. `<meta>` nicht `<metadata>`)
 - Rate NICHT bei Unklarheiten. Stelle eine Frage.
 - Jede Frage muss erklären WARUM sie gestellt wird (reason) und
   auf welches Requirement sie sich bezieht (relates_to).
