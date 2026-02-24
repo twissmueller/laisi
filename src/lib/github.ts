@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 export function exec(cmd: string): string {
-  return execSync(cmd, { encoding: "utf-8" }).trim();
+  return execSync(cmd, { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] }).trim();
 }
 
 export function execSafe(cmd: string): string | null {

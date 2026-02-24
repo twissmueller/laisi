@@ -82,7 +82,12 @@ export async function run(opts: RunOptions): Promise<void> {
       .filter((a): a is Action => a !== null);
 
     if (actions.length === 0) {
-      log("😴 Nichts zu tun.");
+      if (states.length === 0 && assignedIssues.length === 0) {
+        log("😴 Nichts zu tun. Keine Issues gefunden.");
+        log("   → Erstelle ein GitHub Issue und weise es dir zu (`gh issue create --assignee @me`).");
+      } else {
+        log("😴 Nichts zu tun. Alle Issues warten auf externen Input.");
+      }
       return;
     }
 
