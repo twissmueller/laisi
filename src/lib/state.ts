@@ -95,7 +95,11 @@ function determineAction(
   if (latestRelease?.suffix === "xml") return null;
 
   // ── Pending? Warten oder weiter ──
-  const pendingFile = files.find((f) => f.suffix === "pending.xml");
+  // Nur pending-Dateien beachten, die NICHT durch eine spätere completed-Datei überholt sind
+  const pendingFile = files.find((f) => {
+    if (f.suffix !== "pending.xml") return false;
+    return !files.some(c => c.phase === f.phase && c.suffix === "xml" && c.iteration > f.iteration);
+  });
   if (pendingFile) {
     const pendingTime = statSync(pendingFile.fullPath).mtimeMs;
     if (hasNewCommentsSince(nr, pendingTime)) {
