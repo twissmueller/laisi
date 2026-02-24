@@ -14,33 +14,36 @@ const MAX_RETRIES = 2;
 // ─── Claude aufrufen (--print Modus: nur Output, kein Repo-Zugriff) ──
 
 function callClaude(prompt: string): string {
-  const escaped = prompt.replace(/'/g, "'\\''");
-  return execSync(`claude --print '${escaped}'`, {
+  return execSync("claude -p", {
+    input: prompt,
     encoding: "utf-8",
     maxBuffer: 10 * 1024 * 1024, // 10MB
-    timeout: 5 * 60 * 1000, // 5 Minuten
+    timeout: 10 * 60 * 1000, // 10 Minuten
+    stdio: ["pipe", "pipe", "pipe"],
   });
 }
 
 // ─── Claude aufrufen (plain: nur Output, getrimmt, exportiert) ──
 
 export function callClaudePlain(prompt: string): string {
-  const escaped = prompt.replace(/'/g, "'\\''");
-  return execSync(`claude --print '${escaped}'`, {
+  return execSync("claude -p", {
+    input: prompt,
     encoding: "utf-8",
     maxBuffer: 10 * 1024 * 1024,
-    timeout: 5 * 60 * 1000,
+    timeout: 10 * 60 * 1000,
+    stdio: ["pipe", "pipe", "pipe"],
   }).trim();
 }
 
 // ─── Claude aufrufen (interaktiv: hat Repo-Zugriff, für Do-Phase) ──
 
 export function callClaudeInteractive(prompt: string): string {
-  const escaped = prompt.replace(/'/g, "'\\''");
-  return execSync(`claude '${escaped}'`, {
+  return execSync("claude -p", {
+    input: prompt,
     encoding: "utf-8",
     maxBuffer: 10 * 1024 * 1024,
-    timeout: 10 * 60 * 1000, // 10 Minuten
+    timeout: 15 * 60 * 1000, // 15 Minuten
+    stdio: ["pipe", "pipe", "pipe"],
   });
 }
 
