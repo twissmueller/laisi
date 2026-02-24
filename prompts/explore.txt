@@ -90,6 +90,65 @@ aus dem Issue-Text ab. Wenn das Warum nicht erkennbar ist → Rückfrage.
 - Das Issue enthält mehrere unabhängige Features die jeweils eigene
   Issues sein sollten → status = "too_complex"
 
+## Bei too_complex: Strukturierte Split-Vorschläge
+
+Wenn du status = "too_complex" setzt, musst du TROTZDEM:
+1. Alle Requirements extrahieren (mit Quality Gates)
+2. Die Requirements nach unabhängigen Features gruppieren
+3. Pro Feature-Gruppe einen `<split>` erstellen
+
+Regeln für Splits:
+- Mindestens 2 Splits
+- Jedes Requirement wird genau EINEM Split zugeordnet
+- Alle Requirements müssen in genau einem Split vorkommen (keine verwaisten)
+- `<title>` ist ein kurzer, prägnanter Issue-Titel
+- `<body>` ist ein vollständiger Markdown-Text, der direkt als GitHub-Issue
+  verwendet werden kann. Enthalte:
+  - Kurze Beschreibung des Features (1-2 Sätze)
+  - Die zugeordneten Anforderungen als Liste
+  - Akzeptanzkriterien als Checkboxen (`- [ ] ...`)
+- `<requirement_ids>` enthält die IDs der zugeordneten Requirements
+
+Beispiel:
+```xml
+<suggested_splits>
+  <split>
+    <title>CLI-Befehl für Status-Übersicht</title>
+    <body>Neuer `laisi status`-Befehl der eine tabellarische Übersicht aller Issues zeigt.
+
+## Anforderungen
+- REQ-001: Status-Tabelle mit Issue-Nr, Phase, Iteration
+
+## Akzeptanzkriterien
+- [ ] `laisi status` zeigt alle Issues mit aktueller Phase
+- [ ] Ausgabe ist als ASCII-Tabelle formatiert</body>
+    <requirement_ids>
+      <id>REQ-001</id>
+    </requirement_ids>
+  </split>
+</suggested_splits>
+```
+
+## Bei Re-Run nach too_complex: User-Feedback auswerten
+
+Wenn eine vorherige Iteration status="too_complex" hatte und der User
+geantwortet hat, werte sein Feedback aus:
+
+### 1. User bestätigt die Splits ("ja", "passt", "mach so", o.ä.)
+→ Setze status = "splits_confirmed"
+→ Übernimm die Splits aus der vorherigen Iteration (ggf. mit kleinen
+  Anpassungen basierend auf dem Feedback)
+→ Stelle sicher dass suggested_splits vollständig ausgefüllt ist
+
+### 2. User will Änderungen ("ändere X", "split Y anders", o.ä.)
+→ Setze status = "too_complex"
+→ Erstelle überarbeitete Splits basierend auf dem Feedback
+→ Diese werden erneut als Vorschlag gepostet (neue Runde)
+
+### 3. User will keinen Split ("doch nicht aufteilen", "mach alles in einem", o.ä.)
+→ Analysiere das Issue normal als ein Ganzes
+→ Setze status = "complete" oder "needs_clarification" je nach Ergebnis
+
 ## WICHTIG
 - Gib NUR valides XML aus. Kein Text davor oder danach.
 - Beginne mit <?xml version="1.0" encoding="UTF-8"?>

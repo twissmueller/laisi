@@ -4,11 +4,11 @@
  * Input:  0-issue.json (+ vorherige 1-explore-*.xml bei Iterationen)
  * Output: 1-explore-{N}.xml oder 1-explore-{N}.pending.xml
  */
-import { readFileSync, renameSync, readdirSync } from "node:fs";
+import { readFileSync, writeFileSync, renameSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { log } from "../lib/logger.js";
 import { claudeWithValidation, loadPrompt } from "../lib/claude.js";
-import { commentOnIssue, fetchIssue } from "../lib/github.js";
+import { commentOnIssue, fetchIssue, createIssue, closeIssue } from "../lib/github.js";
 import { nextIteration, parseIssueFile } from "../lib/state.js";
 import type { ExploreResult, PhaseContext } from "../types.js";
 
@@ -86,13 +86,70 @@ ${previousExplores}`;
     }
 
     case "too_complex": {
-      commentOnIssue(
-        issueNr,
-        `🤖 **Explore-Phase: Issue zu komplex**\n\nDieses Issue enthält mehrere unabhängige Features. Bitte in separate Issues aufteilen.`,
-      );
+      // fast-xml-parser preserviert snake_case Tag-Namen;
+      // suggested_splits.split ist das Array der Split-Elemente
+      const rawSplits = (explore as any).suggested_splits?.split as
+        | Array<{ title: string; body: string }>
+        | undefined;
+      const splits = rawSplits ?? [];
+      let body = `🤖 **Explore-Phase: Issue zu komplex**\n\nDieses Issue enthält mehrere unabhängige Features. Bitte in separate Issues aufteilen.\n`;
+
+      if (splits.length > 0) {
+        body += `\n### Vorgeschlagene Aufteilung (${splits.length} Issues)\n`;
+        for (const split of splits) {
+          body += `\n<details>\n<summary><b>${split.title}</b></summary>\n\n${split.body}\n\n</details>\n`;
+        }
+        body += `\n---\n_Erstelle die Issues manuell und schließe dieses Issue danach._`;
+      }
+
+      commentOnIssue(issueNr, body);
 
       renameSync(outputPath, join(issueDir, `1-explore-${iter}.pending.xml`));
-      log(`  ⏳ Issue zu komplex, warte auf Aufteilung`);
+      log(`  ⏳ Issue zu komplex, ${splits.length} Split-Vorschläge gepostet`);
+      break;
+    }
+
+    case "splits_confirmed": {
+      // fast-xml-parser preserviert snake_case Tag-Namen
+      const rawSplits = (explore as any).suggested_splits?.split as
+        | Array<{ title: string; body: string }>
+        | undefined;
+      const splits = rawSplits ?? [];
+
+      if (splits.length === 0) {
+        throw new Error("splits_confirmed aber keine suggested_splits im XML");
+      }
+
+      const createdIssues: { number: number; url: string; title: string }[] = [];
+
+      for (const split of splits) {
+        const body = `${split.body}\n\n---\n_Erstellt aus #${issueNr} (Split)_`;
+        const created = createIssue(split.title, body);
+        createdIssues.push({ ...created, title: split.title });
+        log(`  📌 Sub-Issue #${created.number} erstellt: ${split.title}`);
+      }
+
+      // Zusammenfassungs-Kommentar auf Parent
+      const links = createdIssues
+        .map((i) => `- #${i.number}: ${i.title}`)
+        .join("\n");
+      commentOnIssue(
+        issueNr,
+        `🤖 **Split abgeschlossen.** ${createdIssues.length} Sub-Issues erstellt:\n\n${links}`,
+      );
+
+      // Parent schließen
+      closeIssue(issueNr, `Aufgeteilt in ${createdIssues.length} Sub-Issues. Siehe Kommentar oben.`);
+
+      // Marker-Datei schreiben
+      const splitMarker = {
+        parentIssue: issueNr,
+        createdAt: new Date().toISOString(),
+        subIssues: createdIssues.map((i) => ({ number: i.number, url: i.url, title: i.title })),
+      };
+      writeFileSync(join(issueDir, "0-split.json"), JSON.stringify(splitMarker, null, 2));
+
+      log(`  🔀 Issue #${issueNr} aufgeteilt in ${createdIssues.length} Sub-Issues`);
       break;
     }
 

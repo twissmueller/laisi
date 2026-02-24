@@ -19,6 +19,7 @@
                     <xs:enumeration value="complete"/>
                     <xs:enumeration value="needs_clarification"/>
                     <xs:enumeration value="too_complex"/>
+                    <xs:enumeration value="splits_confirmed"/>
                   </xs:restriction>
                 </xs:simpleType>
               </xs:element>
@@ -114,6 +115,29 @@
                     <xs:element name="text" type="xs:string"/>
                     <xs:element name="reason" type="xs:string"/>
                     <xs:element name="relates_to" type="xs:string"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Vorgeschlagene Aufteilung bei too_complex -->
+        <xs:element name="suggested_splits" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="split" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="title" type="xs:string"/>
+                    <xs:element name="body" type="xs:string"/>
+                    <xs:element name="requirement_ids">
+                      <xs:complexType>
+                        <xs:sequence>
+                          <xs:element name="id" type="xs:string" maxOccurs="unbounded"/>
+                        </xs:sequence>
+                      </xs:complexType>
+                    </xs:element>
                   </xs:sequence>
                 </xs:complexType>
               </xs:element>

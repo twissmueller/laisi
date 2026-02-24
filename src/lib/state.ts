@@ -81,6 +81,9 @@ function determineAction(
   // Kein 0-issue.json? Kann nicht weitermachen.
   if (!existsSync(join(issueDir, "0-issue.json"))) return null;
 
+  // Aufgeteilt? Sub-Issues laufen eigenständig.
+  if (existsSync(join(issueDir, "0-split.json"))) return null;
+
   const latestExplore = latestOfPhase(files, "explore");
   const latestPlan = latestOfPhase(files, "plan");
   const latestDo = latestOfPhase(files, "do");

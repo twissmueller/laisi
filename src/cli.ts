@@ -8,7 +8,6 @@
  *   laisi --dry-run        Show what would run
  *   laisi status           Show status of all issues
  *   laisi init             Initialize .issues/ in current repo
- *   laisi groom            Extract tasks from issues
  *   laisi help             Show help
  */
 
@@ -18,7 +17,6 @@ import { fileURLToPath } from "node:url";
 import { run } from "./commands/run.js";
 import { status } from "./commands/status.js";
 import { init } from "./commands/init.js";
-import { groom } from "./commands/groom.js";
 
 
 // ── LAISI's eigenes Verzeichnis (für schemas/ und prompts/) ──
@@ -57,10 +55,6 @@ switch (command) {
     init();
     break;
 
-  case "groom":
-    await groom({ dryRun: flags.has("--dry-run"), issueNumber: parseIssueFlag(), laisiHome: LAISI_HOME });
-    break;
-
   case "help":
   case "--help":
   case "-h":
@@ -87,9 +81,6 @@ Usage:
   laisi --dry-run       Show what would run without executing
   laisi status          Show status of all tracked issues
   laisi init            Initialize .issues/ directory
-  laisi groom           Extract tasks from issues into ## Tasks section
-  laisi groom --issue=42  Groom a specific issue
-  laisi groom --dry-run   Show what groom would change without modifying issues
   laisi help            Show this help
 
 Each invocation executes exactly ONE step on the highest-priority

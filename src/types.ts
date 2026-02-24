@@ -61,7 +61,7 @@ export interface Action {
 
 // ─── Explore-Phase Typen ────────────────────────────────────
 
-export type ExploreStatus = "complete" | "needs_clarification" | "too_complex";
+export type ExploreStatus = "complete" | "needs_clarification" | "too_complex" | "splits_confirmed";
 
 export interface ExploreMeta {
   issue: number;
@@ -107,12 +107,19 @@ export interface OpenQuestion {
   relatesTo: string;
 }
 
+export interface SuggestedSplit {
+  title: string;
+  body: string;
+  requirementIds: string[];
+}
+
 export interface ExploreResult {
   meta: ExploreMeta;
   context: string;
   requirements: Requirement[];
   flaggedTerms?: FlaggedTerm[];
   openQuestions?: OpenQuestion[];
+  suggestedSplits?: SuggestedSplit[];
   handoff: string;
 }
 

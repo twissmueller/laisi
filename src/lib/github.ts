@@ -98,6 +98,32 @@ export function updateIssueBody(nr: number, body: string): void {
   }
 }
 
+// ─── Issue-Erstellung und -Verwaltung ───────────────────────
+
+export interface CreatedIssue {
+  number: number;
+  url: string;
+}
+
+export function createIssue(title: string, body: string): CreatedIssue {
+  // --body-file um Shell-Escaping-Probleme zu vermeiden (wie updateIssueBody)
+  const tmpPath = join(tmpdir(), `laisi-issue-create-${Date.now()}.md`);
+  writeFileSync(tmpPath, body);
+  try {
+    const url = exec(
+      `gh issue create --title ${JSON.stringify(title)} --body-file "${tmpPath}" --assignee @me`,
+    );
+    const nr = parseInt(url.split("/").pop()!, 10);
+    return { number: nr, url };
+  } finally {
+    unlinkSync(tmpPath);
+  }
+}
+
+export function closeIssue(nr: number, comment: string): void {
+  execSafe(`gh issue close ${nr} --comment ${JSON.stringify(comment)}`);
+}
+
 // ─── GitHub Pull Requests ───────────────────────────────────
 
 export function isPrMerged(issueNr: number): boolean {

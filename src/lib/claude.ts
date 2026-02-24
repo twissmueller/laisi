@@ -83,6 +83,7 @@ const parser = new XMLParser({
       "gate",
       "term",
       "question",
+      "split",
     ].includes(name);
   },
 });

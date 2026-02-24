@@ -1,6 +1,7 @@
 /**
  * `laisi status` – Zeigt den Zustand aller Issues
  */
+import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { getRepoRoot } from "../lib/github.js";
 import { scanAllIssues } from "../lib/state.js";
@@ -42,7 +43,9 @@ export function status(_opts: StatusOptions): void {
     const phase = (state.latestPhase ?? "—").padEnd(12);
 
     let statusText: string;
-    if (state.latestFile?.suffix === "pending.xml") {
+    if (existsSync(join(issuesDir, String(state.issueNumber), "0-split.json"))) {
+      statusText = "🔀 aufgeteilt";
+    } else if (state.latestFile?.suffix === "pending.xml") {
       statusText = "⏳ wartet";
     } else if (state.latestFile?.suffix === "failed.xml") {
       statusText = "❌ failed";
