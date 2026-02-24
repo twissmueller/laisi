@@ -51,14 +51,30 @@ export function callClaudeInteractive(prompt: string): string {
 
 function extractXml(raw: string): string {
   // Claude schreibt manchmal Prosa vor/nach dem XML
+  let xml: string;
+
   const xmlStart = raw.indexOf("<?xml");
   if (xmlStart === -1) {
     // Vielleicht direkt mit <explore> o.ä. angefangen
     const tagStart = raw.indexOf("<");
     if (tagStart === -1) throw new Error("Kein XML im Output gefunden");
-    return raw.slice(tagStart);
+    xml = raw.slice(tagStart);
+  } else {
+    xml = raw.slice(xmlStart);
   }
-  return raw.slice(xmlStart);
+
+  // Trailing-Text nach dem schließenden Root-Tag abschneiden
+  // Root-Tag aus der ersten Zeile extrahieren (z.B. <explore ...> → explore)
+  const rootMatch = xml.match(/<([a-zA-Z_][\w.-]*)/);
+  if (rootMatch) {
+    const closingTag = `</${rootMatch[1]}>`;
+    const closingIdx = xml.lastIndexOf(closingTag);
+    if (closingIdx !== -1) {
+      xml = xml.slice(0, closingIdx + closingTag.length);
+    }
+  }
+
+  return xml;
 }
 
 // ─── XML validieren (well-formed check) ─────────────────────
