@@ -26,30 +26,3 @@ export function loadConfig(repoRoot: string): LaisiConfig {
   }
 }
 
-export function formatPreferences(config: LaisiConfig): string {
-  const prefs = config.preferences;
-  if (!prefs) return "";
-
-  const lines: string[] = [];
-  lines.push("## Project preferences (from .laisi.yml)");
-  lines.push("");
-
-  if (prefs.languages?.length) {
-    lines.push(`- **Languages/Frameworks:** ${prefs.languages.join(", ")}`);
-  }
-  if (prefs.forbidden?.length) {
-    lines.push(`- **Forbidden:** ${prefs.forbidden.join(", ")}`);
-  }
-  if (prefs.apis?.length) {
-    lines.push(`- **Preferred APIs/Services:** ${prefs.apis.join(", ")}`);
-  }
-  if (prefs.notes) {
-    lines.push(`- **Notes:** ${prefs.notes}`);
-  }
-
-  // Only return content if we actually have preferences
-  if (lines.length <= 2) return "";
-
-  lines.push("");
-  return lines.join("\n");
-}
