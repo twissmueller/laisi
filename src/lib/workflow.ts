@@ -21,11 +21,16 @@ export interface PhaseDefinition {
   input: string;
   output: string;
   schema: string;
-  prompt: string;
   max_retries: number;
   human_gate?: HumanGateConfig;
+  // LLM-specific:
+  prompt?: string;
   tools?: string[];
   cwd?: string;
+  // Script-specific:
+  type?: "llm" | "script";
+  script?: string;
+  output_format?: "xml" | "json" | "yaml";
 }
 
 export interface WorkflowDefinition {
@@ -60,10 +65,31 @@ export function loadWorkflow(
   }
 
   for (const phase of doc.phases) {
-    if (!phase.id || !phase.description || !phase.input || !phase.output || !phase.schema || !phase.prompt) {
+    if (!phase.id || !phase.description || !phase.input || !phase.output || !phase.schema) {
       throw new Error(
         `Invalid phase in ${filePath}: missing required field in phase "${phase.id ?? "unknown"}"`,
       );
+    }
+
+    // Type-specific validation
+    const isScript = phase.type === "script";
+    if (isScript) {
+      if (!phase.script) {
+        throw new Error(`Script phase "${phase.id}" missing required "script" field`);
+      }
+      if (phase.prompt) {
+        throw new Error(`Script phase "${phase.id}" should not have "prompt" field`);
+      }
+    } else {
+      if (!phase.prompt) {
+        throw new Error(`LLM phase "${phase.id}" missing required "prompt" field`);
+      }
+      if (phase.output_format) {
+        throw new Error(`"output_format" is only valid for script phases ("${phase.id}")`);
+      }
+      if (phase.script) {
+        throw new Error(`LLM phase "${phase.id}" should not have "script" field`);
+      }
     }
 
     // Validate human_gate type if present

@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { loadWorkflow } from "../../src/lib/workflow.js";
-import { resolve } from "node:path";
+import { resolve, join } from "node:path";
+import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 
 const LAISI_HOME = resolve(import.meta.dirname, "../..");
 
@@ -38,5 +39,94 @@ describe("loadWorkflow", () => {
       expect(Array.isArray(withTools.tools)).toBe(true);
       expect(withTools.cwd).toBeTruthy();
     }
+  });
+});
+
+describe("loadWorkflow script phases", () => {
+  const tmpDir = join(import.meta.dirname, "../../.test-workflows");
+
+  beforeEach(() => {
+    mkdirSync(join(tmpDir, "workflows"), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("accepts a valid script phase", () => {
+    writeFileSync(join(tmpDir, "workflows", "test-script.yml"), `
+workflow: test-script
+description: test
+phases:
+  - id: verify
+    description: Run verification
+    input: 3-implement.xml
+    output: 4-verify.xml
+    schema: schemas/verify.xsd
+    type: script
+    script: scripts/verify.sh
+    output_format: json
+    max_retries: 2
+`);
+    const wf = loadWorkflow(tmpDir, "test-script");
+    expect(wf.phases[0].type).toBe("script");
+    expect(wf.phases[0].script).toBe("scripts/verify.sh");
+    expect(wf.phases[0].output_format).toBe("json");
+  });
+
+  it("rejects script phase without script field", () => {
+    writeFileSync(join(tmpDir, "workflows", "bad-script.yml"), `
+workflow: bad-script
+description: test
+phases:
+  - id: verify
+    description: Run verification
+    input: 3-implement.xml
+    output: 4-verify.xml
+    schema: schemas/verify.xsd
+    type: script
+    max_retries: 2
+`);
+    expect(() => loadWorkflow(tmpDir, "bad-script")).toThrow(/missing required "script"/);
+  });
+
+  it("rejects script phase with prompt field", () => {
+    writeFileSync(join(tmpDir, "workflows", "bad-prompt.yml"), `
+workflow: bad-prompt
+description: test
+phases:
+  - id: verify
+    description: Run verification
+    input: 3-implement.xml
+    output: 4-verify.xml
+    schema: schemas/verify.xsd
+    type: script
+    script: scripts/verify.sh
+    prompt: prompts/verify.md
+    max_retries: 2
+`);
+    expect(() => loadWorkflow(tmpDir, "bad-prompt")).toThrow(/should not have "prompt"/);
+  });
+
+  it("rejects LLM phase with output_format", () => {
+    writeFileSync(join(tmpDir, "workflows", "bad-format.yml"), `
+workflow: bad-format
+description: test
+phases:
+  - id: intent
+    description: Extract intent
+    input: 0-issue.json
+    output: 1-intent.xml
+    schema: schemas/intent.xsd
+    prompt: prompts/01-intent.md
+    output_format: json
+    max_retries: 3
+`);
+    expect(() => loadWorkflow(tmpDir, "bad-format")).toThrow(/only valid for script phases/);
+  });
+
+  it("defaults type to llm when not specified", () => {
+    const wf = loadWorkflow(LAISI_HOME, "github-issue-intake");
+    expect(wf.phases[0].type).toBeUndefined();
   });
 });
