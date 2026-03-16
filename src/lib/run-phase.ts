@@ -7,8 +7,10 @@
  */
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { execSync } from "node:child_process";
+import { parse as parseYaml } from "yaml";
 import { log } from "./logger.js";
-import { generateSkeleton, extractSchemaShape, getArrayElements } from "./schema.js";
+import { generateSkeleton, extractSchemaShape, getArrayElements, dataToXml } from "./schema.js";
 import { callClaude, extractXml, validateXml, parseXml, loadPrompt } from "./claude.js";
 import type { PhaseDefinition, HumanGateConfig } from "./workflow.js";
 
@@ -77,6 +79,55 @@ ${validationError}
 Please correct and output ONLY valid XML that conforms to the skeleton structure.`;
 }
 
+// ─── Script Output Conversion ──────────────────────────────
+
+export function convertScriptOutput(
+  raw: string,
+  format: "xml" | "json" | "yaml",
+  xsdPath: string,
+): string {
+  switch (format) {
+    case "xml":
+      return extractXml(raw);
+    case "json": {
+      const data = JSON.parse(raw) as Record<string, unknown>;
+      return dataToXml(data, xsdPath);
+    }
+    case "yaml": {
+      const data = parseYaml(raw) as Record<string, unknown>;
+      return dataToXml(data, xsdPath);
+    }
+  }
+}
+
+// ─── Script Execution ──────────────────────────────────────
+
+function executeScript(
+  scriptPath: string,
+  inputContent: string,
+  env: Record<string, string>,
+  repoRoot: string,
+): string {
+  try {
+    return execSync(scriptPath, {
+      input: inputContent,
+      encoding: "utf-8",
+      maxBuffer: 10 * 1024 * 1024,
+      timeout: 5 * 60 * 1000,
+      stdio: ["pipe", "pipe", "pipe"],
+      cwd: repoRoot,
+      env: { ...process.env, ...env },
+    });
+  } catch (err: unknown) {
+    const e = err as { status?: number; stderr?: string; killed?: boolean };
+    if (e.killed) {
+      throw new Error("Script timed out after 5 minutes");
+    }
+    const stderr = typeof e.stderr === "string" ? e.stderr.trim() : "";
+    throw new Error(`Script exited with code ${e.status ?? 1}: ${stderr}`);
+  }
+}
+
 // ─── Core Loop ─────────────────────────────────────────────
 
 export async function runPhase(
@@ -86,96 +137,154 @@ export async function runPhase(
   repoRoot: string,
 ): Promise<PhaseResult> {
   const maxAttempts = phase.max_retries;
-
-  // 1. Load schema and generate skeleton
   const schemaPath = join(laisiHome, phase.schema);
-  const skeleton = generateSkeleton(schemaPath);
   const shape = extractSchemaShape(schemaPath);
   const arrayElements = getArrayElements(schemaPath);
+  const outputPath = join(issueDir, phase.output);
 
-  log(`  Skeleton generated for <${shape.rootElement}>`);
-
-  // 2. Load input content
+  // Load input content
   const inputPath = join(issueDir, phase.input);
   const inputContent = readFileSync(inputPath, "utf-8");
 
-  // 3. Load system prompt (no variable substitution — input is passed separately)
-  const promptPath = join(laisiHome, phase.prompt);
-  const systemPrompt = loadPrompt(promptPath, {});
-
-  // 4. Resolve cwd
-  const cwd = phase.cwd === "repo_root" ? repoRoot : undefined;
-
-  // 5. Attempt loop
   let lastOutput = "";
   let lastError = "";
-  const outputPath = join(issueDir, phase.output);
 
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    log(`  Claude call (attempt ${attempt + 1}/${maxAttempts})...`);
+  if (phase.type === "script") {
+    // ── Script execution path ──
+    const scriptPath = join(laisiHome, phase.script!);
+    const format = phase.output_format ?? "xml";
+    log(`  Script phase: ${scriptPath} (format: ${format})`);
 
-    // Build prompt
-    const prompt = attempt === 0
-      ? buildPrompt(systemPrompt, inputContent, skeleton)
-      : buildRetryPrompt(
-          systemPrompt, inputContent, skeleton,
-          lastOutput, lastError, attempt, maxAttempts,
-        );
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      log(`  Script run (attempt ${attempt + 1}/${maxAttempts})...`);
 
-    try {
-      // Call Claude
-      const raw = callClaude(prompt, cwd, phase.tools);
+      const env: Record<string, string> = {
+        LAISI_ISSUE_DIR: issueDir,
+        LAISI_INPUT_PATH: inputPath,
+        LAISI_OUTPUT_PATH: outputPath,
+        LAISI_REPO_ROOT: repoRoot,
+        LAISI_VALIDATION_ERROR: lastError,
+      };
 
-      // Extract XML
-      let xml: string;
       try {
-        xml = extractXml(raw);
-      } catch {
-        lastOutput = raw;
-        lastError = "No valid XML found in output.";
-        log(`  ⚠️ ${lastError}`);
-        continue;
+        const stdout = executeScript(scriptPath, inputContent, env, repoRoot);
+
+        // Convert output format
+        let xml: string;
+        try {
+          xml = convertScriptOutput(stdout, format, schemaPath);
+        } catch (err) {
+          lastOutput = stdout;
+          lastError = `Output conversion failed: ${err instanceof Error ? err.message : String(err)}`;
+          log(`  ⚠️ ${lastError}`);
+          continue;
+        }
+
+        // Validate
+        const validation = validateXml(xml);
+        if (!validation.valid) {
+          lastOutput = xml;
+          lastError = validation.error!;
+          log(`  ⚠️ Invalid XML: ${lastError}`);
+          continue;
+        }
+
+        const data = parseXml<Record<string, unknown>>(xml, arrayElements);
+        if (!(shape.rootElement in data)) {
+          const actualRoots = Object.keys(data).filter((k) => k !== "?xml");
+          lastOutput = xml;
+          lastError = `Wrong root element: expected <${shape.rootElement}>, found <${actualRoots[0] ?? "??"}>`;
+          log(`  ⚠️ ${lastError}`);
+          continue;
+        }
+
+        const root = data[shape.rootElement] as Record<string, unknown>;
+        const missingChildren = shape.requiredChildren.filter((c) => !(c in root));
+        if (missingChildren.length > 0) {
+          lastOutput = xml;
+          lastError = `Missing required elements in <${shape.rootElement}>: ${missingChildren.join(", ")}`;
+          log(`  ⚠️ ${lastError}`);
+          continue;
+        }
+
+        writeFileSync(outputPath, xml);
+        log(`  ✅ XML written: ${outputPath}`);
+        return { success: true, outputPath, data };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        lastOutput = "";
+        lastError = message;
+        log(`  ❌ Error: ${message}`);
       }
+    }
+  } else {
+    // ── LLM execution path (existing) ──
+    const skeleton = generateSkeleton(schemaPath);
+    log(`  Skeleton generated for <${shape.rootElement}>`);
 
-      // Validate well-formedness
-      const validation = validateXml(xml);
-      if (!validation.valid) {
-        lastOutput = xml;
-        lastError = validation.error!;
-        log(`  ⚠️ Invalid XML: ${lastError}`);
-        continue;
+    const promptPath = join(laisiHome, phase.prompt!);
+    const systemPrompt = loadPrompt(promptPath, {});
+    const cwd = phase.cwd === "repo_root" ? repoRoot : undefined;
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      log(`  Claude call (attempt ${attempt + 1}/${maxAttempts})...`);
+
+      const prompt = attempt === 0
+        ? buildPrompt(systemPrompt, inputContent, skeleton)
+        : buildRetryPrompt(
+            systemPrompt, inputContent, skeleton,
+            lastOutput, lastError, attempt, maxAttempts,
+          );
+
+      try {
+        const raw = callClaude(prompt, cwd, phase.tools);
+
+        let xml: string;
+        try {
+          xml = extractXml(raw);
+        } catch {
+          lastOutput = raw;
+          lastError = "No valid XML found in output.";
+          log(`  ⚠️ ${lastError}`);
+          continue;
+        }
+
+        const validation = validateXml(xml);
+        if (!validation.valid) {
+          lastOutput = xml;
+          lastError = validation.error!;
+          log(`  ⚠️ Invalid XML: ${lastError}`);
+          continue;
+        }
+
+        const data = parseXml<Record<string, unknown>>(xml, arrayElements);
+
+        if (!(shape.rootElement in data)) {
+          const actualRoots = Object.keys(data).filter((k) => k !== "?xml");
+          lastOutput = xml;
+          lastError = `Wrong root element: expected <${shape.rootElement}>, found <${actualRoots[0] ?? "??"}>`;
+          log(`  ⚠️ ${lastError}`);
+          continue;
+        }
+
+        const root = data[shape.rootElement] as Record<string, unknown>;
+        const missingChildren = shape.requiredChildren.filter((c) => !(c in root));
+        if (missingChildren.length > 0) {
+          lastOutput = xml;
+          lastError = `Missing required elements in <${shape.rootElement}>: ${missingChildren.join(", ")}`;
+          log(`  ⚠️ ${lastError}`);
+          continue;
+        }
+
+        writeFileSync(outputPath, xml);
+        log(`  ✅ XML written: ${outputPath}`);
+        return { success: true, outputPath, data };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        lastOutput = "";
+        lastError = message;
+        log(`  ❌ Error: ${message}`);
       }
-
-      // Parse and validate structure
-      const data = parseXml<Record<string, unknown>>(xml, arrayElements);
-
-      if (!(shape.rootElement in data)) {
-        const actualRoots = Object.keys(data).filter((k) => k !== "?xml");
-        lastOutput = xml;
-        lastError = `Wrong root element: expected <${shape.rootElement}>, found <${actualRoots[0] ?? "??"}>`;
-        log(`  ⚠️ ${lastError}`);
-        continue;
-      }
-
-      const root = data[shape.rootElement] as Record<string, unknown>;
-      const missingChildren = shape.requiredChildren.filter((c) => !(c in root));
-      if (missingChildren.length > 0) {
-        lastOutput = xml;
-        lastError = `Missing required elements in <${shape.rootElement}>: ${missingChildren.join(", ")}`;
-        log(`  ⚠️ ${lastError}`);
-        continue;
-      }
-
-      // Valid! Write output
-      writeFileSync(outputPath, xml);
-      log(`  ✅ XML written: ${outputPath}`);
-
-      return { success: true, outputPath, data };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      lastOutput = "";
-      lastError = message;
-      log(`  ❌ Error: ${message}`);
     }
   }
 

@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { buildPrompt, buildRetryPrompt, evaluateHumanGate } from "../../src/lib/run-phase.js";
+import { buildPrompt, buildRetryPrompt, evaluateHumanGate, convertScriptOutput } from "../../src/lib/run-phase.js";
+import { resolve } from "node:path";
+
+const SCHEMAS_DIR = resolve(import.meta.dirname, "../../schemas");
 
 describe("buildPrompt", () => {
   it("combines system prompt, input, and skeleton", () => {
@@ -70,5 +73,47 @@ describe("evaluateHumanGate", () => {
     const data = { intent: { objective: "test" } };
     const gate = { on_field: "nonexistent.field", value: "true" };
     expect(evaluateHumanGate(gate, data, "intent")).toBe(false);
+  });
+});
+
+describe("convertScriptOutput", () => {
+  it("passes XML through extractXml", () => {
+    const result = convertScriptOutput(
+      '<?xml version="1.0"?><explore><meta></meta></explore>',
+      "xml",
+      resolve(SCHEMAS_DIR, "explore.xsd"),
+    );
+    expect(result).toContain("<explore>");
+  });
+
+  it("converts JSON to XML via dataToXml", () => {
+    const json = JSON.stringify({
+      meta: { issue: 1, title: "T", date: "2026-01-01", iteration: 1, status: "complete" },
+      context: "ctx",
+      requirements: {},
+      handoff: "done",
+    });
+    const result = convertScriptOutput(json, "json", resolve(SCHEMAS_DIR, "explore.xsd"));
+    expect(result).toContain("<explore>");
+    expect(result).toContain("<issue>1</issue>");
+  });
+
+  it("converts YAML to XML via dataToXml", () => {
+    const yaml = `meta:
+  issue: 1
+  title: T
+  date: "2026-01-01"
+  iteration: 1
+  status: complete
+context: ctx
+requirements: {}
+handoff: done`;
+    const result = convertScriptOutput(yaml, "yaml", resolve(SCHEMAS_DIR, "explore.xsd"));
+    expect(result).toContain("<explore>");
+    expect(result).toContain("<issue>1</issue>");
+  });
+
+  it("throws on invalid JSON", () => {
+    expect(() => convertScriptOutput("{bad", "json", "any.xsd")).toThrow();
   });
 });
