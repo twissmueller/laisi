@@ -289,7 +289,7 @@ import { describe, it, expect } from "vitest";
 import { generateSkeleton, extractSchemaShape, getArrayElements } from "../../src/lib/schema.js";
 import { resolve } from "node:path";
 
-const SCHEMAS_DIR = resolve(__dirname, "../../schemas");
+const SCHEMAS_DIR = resolve(import.meta.dirname, "../../schemas");
 
 describe("generateSkeleton", () => {
   it("generates a skeleton from explore.xsd with nested elements", () => {
