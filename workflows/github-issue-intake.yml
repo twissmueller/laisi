@@ -1,0 +1,26 @@
+workflow: github-issue-intake
+description: >
+  Extracts a structured IntentSpec from a GitHub Issue or Comment.
+  The filesystem is the state — phases run sequentially,
+  each phase only starts when its input exists.
+
+phases:
+  - id: intent
+    description: Extract a machine-executable IntentSpec from raw user input
+    input: 0-issue.json
+    output: 1-intent.xml
+    schema: schemas/intent.xsd
+    prompt: prompts/01-intent.md
+    max_retries: 3
+    human_gate:
+      on_field: ambiguous
+      value: "true"
+
+  - id: scope
+    description: Map the IntentSpec to concrete changes in the codebase
+    input: 1-intent.xml
+    output: 2-scope.xml
+    schema: schemas/scope.xsd
+    prompt: prompts/02-scope.md
+    max_retries: 3
+    human_gate: always
