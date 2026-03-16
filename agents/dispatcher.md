@@ -1,78 +1,78 @@
 # Agent: Dispatcher
 
-> Ich bestimme WELCHES Issue bearbeitet wird und WELCHE Phase als nächstes dran ist.
-> Ich bin kein AI-Agent – ich bin reine Logik, implementiert in TypeScript.
+> I determine WHICH issue is processed and WHICH phase is next.
+> I am not an AI agent – I am pure logic, implemented in TypeScript.
 
-## Identität
+## Identity
 
-Ich bin der Einstiegspunkt jedes `laisi run`. Ich treffe keine kreativen
-Entscheidungen – ich lese den Dateisystem-State und wende deterministische
-Regeln an.
+I am the entry point of every `laisi run`. I make no creative
+decisions – I read the filesystem state and apply deterministic
+rules.
 
-## Mein Algorithmus
+## My Algorithm
 
-### 1. Neue Issues entdecken
+### 1. Discover New Issues
 
 ```
-Für jedes Issue das mir auf GitHub zugewiesen ist:
-  Wenn kein Verzeichnis .issues/{nr}/ existiert:
-    → Verzeichnis anlegen
-    → 0-issue.json fetchen (gh issue view)
+For each issue assigned to me on GitHub:
+  If no directory .issues/{nr}/ exists:
+    → Create directory
+    → Fetch 0-issue.json (gh issue view)
 ```
 
-### 2. Pro Issue: Nächste Phase bestimmen
+### 2. Per Issue: Determine Next Phase
 
-Ich schaue welche Dateien existieren und leite daraus den nächsten Schritt ab:
+I check which files exist and derive the next step from that:
 
 ```
 .issues/{nr}/
-  Kein 1-explore-*.xml?                → Phase: EXPLORE
-  1-explore-N.pending.xml?             → Prüfe: Neue Antwort im Issue?
-                                          Ja → Phase: EXPLORE (nochmal)
-                                          Nein → Warten. Skip.
-  1-explore-N.xml, kein 2-plan-*.xml?  → Phase: PLAN
-  4-check-N.failed.xml?                → Phase: PLAN (Replan)
-  2-plan-N.xml, kein 3-do-*.xml?       → Phase: DO
-  3-do-N.xml, kein 4-check-*.xml?      → Phase: CHECK
-  4-check-N.xml, kein 5-act-*.xml?     → Phase: ACT
-  5-act-N.xml, kein 6-release-*.xml?   → Prüfe: PR gemerged?
-                                          Ja → Phase: RELEASE
-                                          Nein → Warten. Skip.
-  6-release-N.xml?                     → Fertig. Skip.
+  No 1-explore-*.xml?                    → Phase: EXPLORE
+  1-explore-N.pending.xml?               → Check: New reply in issue?
+                                            Yes → Phase: EXPLORE (again)
+                                            No → Waiting. Skip.
+  1-explore-N.xml, no 2-plan-*.xml?      → Phase: PLAN
+  4-check-N.failed.xml?                  → Phase: PLAN (Replan)
+  2-plan-N.xml, no 3-do-*.xml?           → Phase: DO
+  3-do-N.xml, no 4-check-*.xml?          → Phase: CHECK
+  4-check-N.xml, no 5-act-*.xml?         → Phase: ACT
+  5-act-N.xml, no 6-release-*.xml?       → Check: PR merged?
+                                            Yes → Phase: RELEASE
+                                            No → Waiting. Skip.
+  6-release-N.xml?                       → Done. Skip.
 ```
 
-### 3. Priorisierung: Welches Issue zuerst?
+### 3. Prioritization: Which Issue First?
 
-Wenn mehrere Issues einen nächsten Schritt haben, wähle ich nach
-**Workflow-Fortschritt** – Issues die weiter sind haben Vorrang:
+When multiple issues have a next step, I choose by
+**workflow progress** – issues that are further along take priority:
 
 ```
-Priorität 1 (höchste): Release
-Priorität 2: Act
-Priorität 3: Check
-Priorität 4: Plan (inkl. Replan)
-Priorität 5: Do
-Priorität 6: Explore
+Priority 1 (highest): Release
+Priority 2: Act
+Priority 3: Check
+Priority 4: Plan (incl. Replan)
+Priority 5: Do
+Priority 6: Explore
 ```
 
-Begründung: Lieber ein Issue fertigmachen als drei anfangen.
+Rationale: Better to finish one issue than to start three.
 
-### 4. Genau EIN Issue, EINE Phase ausführen
+### 4. Execute Exactly ONE Issue, ONE Phase
 
-Ich wähle das Issue mit der höchsten Priorität und leite an den
-entsprechenden Phase-Agenten weiter. Dann ist mein Job erledigt.
+I select the issue with the highest priority and hand off to the
+corresponding phase agent. Then my job is done.
 
-## Implementierung
+## Implementation
 
-- State-Logik: `src/lib/state.ts` → `determineAction()`, `scanAllIssues()`
-- Orchestrierung: `src/commands/run.ts`
-- GitHub-Checks: `src/lib/github.ts` → `hasNewCommentsSince()`, `isPrMerged()`
+- State logic: `src/lib/state.ts` → `determineAction()`, `scanAllIssues()`
+- Orchestration: `src/commands/run.ts`
+- GitHub checks: `src/lib/github.ts` → `hasNewCommentsSince()`, `isPrMerged()`
 
-## Replan-Logik (Sonderfall)
+## Replan Logic (Special Case)
 
-Wenn `4-check-N.failed.xml` existiert und die höchste check-Datei ist:
-1. Lösche alle `2-plan-*.xml` und `3-do-*.xml`
-2. Starte Plan-Phase neu mit `4-check-N.failed.xml` als zusätzlichem Input
+When `4-check-N.failed.xml` exists and is the most recent check file:
+1. Delete all `2-plan-*.xml` and `3-do-*.xml`
+2. Restart the Plan phase with `4-check-N.failed.xml` as additional input
 
-Dies wird im Orchestrator (`src/commands/run.ts`) behandelt,
-bevor der Plan-Agent aufgerufen wird.
+This is handled in the orchestrator (`src/commands/run.ts`),
+before the Plan agent is invoked.

@@ -1,8 +1,8 @@
 /**
  * Claude Code CLI Wrapper
  *
- * Ruft Claude auf und validiert den XML-Output gegen ein Schema.
- * Retry bei ungültigem Output.
+ * Calls Claude and validates the XML output against a schema.
+ * Retries on invalid output.
  */
 import { execSync } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
@@ -14,20 +14,27 @@ import type { Phase } from "../types.js";
 
 const MAX_RETRIES = 2;
 
-// ─── Claude aufrufen (--print Modus: nur Output, kein Repo-Zugriff) ──
+// ─── Call Claude (--print mode: output only, no repo access) ──
 
-function callClaude(prompt: string, cwd?: string): string {
-  return execSync("claude -p", {
+function callClaude(prompt: string, cwd?: string, allowedTools?: string[]): string {
+  const toolFlag = allowedTools?.length
+    ? ` --allowedTools "${allowedTools.join(",")}"`
+    : "";
+  const timeout = allowedTools?.length
+    ? 30 * 60 * 1000  // 30 minutes when tools are active (implementation takes longer)
+    : 15 * 60 * 1000; // 15 minutes default
+
+  return execSync(`claude -p${toolFlag}`, {
     input: prompt,
     encoding: "utf-8",
     maxBuffer: 10 * 1024 * 1024, // 10MB
-    timeout: 15 * 60 * 1000, // 15 Minuten
+    timeout,
     stdio: ["pipe", "pipe", "pipe"],
     ...(cwd ? { cwd } : {}),
   });
 }
 
-// ─── Claude aufrufen (plain: nur Output, getrimmt, exportiert) ──
+// ─── Call Claude (plain: output only, trimmed, exported) ──
 
 export function callClaudePlain(prompt: string): string {
   return execSync("claude -p", {
@@ -39,36 +46,24 @@ export function callClaudePlain(prompt: string): string {
   }).trim();
 }
 
-// ─── Claude aufrufen (interaktiv: hat Repo-Zugriff, für Do-Phase) ──
-
-export function callClaudeInteractive(prompt: string): string {
-  return execSync("claude -p", {
-    input: prompt,
-    encoding: "utf-8",
-    maxBuffer: 10 * 1024 * 1024,
-    timeout: 15 * 60 * 1000, // 15 Minuten
-    stdio: ["pipe", "pipe", "pipe"],
-  });
-}
-
-// ─── XML aus Claude-Output extrahieren ──────────────────────
+// ─── Extract XML from Claude output ─────────────────────────
 
 function extractXml(raw: string): string {
-  // Claude schreibt manchmal Prosa vor/nach dem XML
+  // Claude sometimes writes prose before/after the XML
   let xml: string;
 
   const xmlStart = raw.indexOf("<?xml");
   if (xmlStart === -1) {
-    // Vielleicht direkt mit <explore> o.ä. angefangen
+    // Maybe started directly with <explore> or similar
     const tagStart = raw.indexOf("<");
-    if (tagStart === -1) throw new Error("Kein XML im Output gefunden");
+    if (tagStart === -1) throw new Error("No XML found in output");
     xml = raw.slice(tagStart);
   } else {
     xml = raw.slice(xmlStart);
   }
 
-  // Trailing-Text nach dem schließenden Root-Tag abschneiden
-  // Root-Tag aus der ersten Zeile extrahieren (z.B. <explore ...> → explore)
+  // Strip trailing text after closing root tag
+  // Extract root tag from the first line (e.g. <explore ...> → explore)
   const rootMatch = xml.match(/<([a-zA-Z_][\w.-]*)/);
   if (rootMatch) {
     const closingTag = `</${rootMatch[1]}>`;
@@ -81,25 +76,25 @@ function extractXml(raw: string): string {
   return xml;
 }
 
-// ─── XML validieren (well-formed check) ─────────────────────
+// ─── Validate XML (well-formed check) ───────────────────────
 
 function validateXml(xml: string): { valid: boolean; error?: string } {
   const result = XMLValidator.validate(xml);
   if (result === true) return { valid: true };
   return {
     valid: false,
-    error: `Zeile ${result.err.line}, Spalte ${result.err.col}: ${result.err.msg}`,
+    error: `Line ${result.err.line}, Column ${result.err.col}: ${result.err.msg}`,
   };
 }
 
-// ─── XML parsen ─────────────────────────────────────────────
+// ─── Parse XML ──────────────────────────────────────────────
 
 const parser = new XMLParser({
   ignoreAttributes: false,
   parseTagValue: true,
   trimValues: true,
   isArray: (name) => {
-    // Diese Elemente sind immer Arrays, auch bei nur einem Kind
+    // These elements are always arrays, even with only one child
     return [
       "requirement",
       "criterion",
@@ -119,7 +114,7 @@ export function parseXml<T>(xml: string): T {
   return parser.parse(xml) as T;
 }
 
-// ─── Strukturelle Validierung gegen XSD-Shape ───────────────
+// ─── Structural validation against XSD shape ────────────────
 
 function validateStructure(
   data: Record<string, unknown>,
@@ -127,32 +122,32 @@ function validateStructure(
 ): { valid: boolean; errors: string[] } {
   const errors: string[] = [];
 
-  // Root-Element prüfen
+  // Check root element
   if (!(shape.rootElement in data)) {
     const actualRoots = Object.keys(data).filter((k) => k !== "?xml");
     errors.push(
-      `Falsches Root-Element: erwartet <${shape.rootElement}>, gefunden: <${actualRoots[0] ?? "??"}>`,
+      `Wrong root element: expected <${shape.rootElement}>, found: <${actualRoots[0] ?? "??"}>`,
     );
     return { valid: false, errors };
   }
 
-  // Required Children prüfen
+  // Check required children
   const root = data[shape.rootElement] as Record<string, unknown>;
   if (typeof root !== "object" || root === null) {
-    errors.push(`Root-Element <${shape.rootElement}> ist leer oder kein Objekt`);
+    errors.push(`Root element <${shape.rootElement}> is empty or not an object`);
     return { valid: false, errors };
   }
 
   for (const child of shape.requiredChildren) {
     if (!(child in root)) {
-      errors.push(`Pflicht-Element <${child}> fehlt in <${shape.rootElement}>`);
+      errors.push(`Required element <${child}> missing in <${shape.rootElement}>`);
     }
   }
 
   return { valid: errors.length === 0, errors };
 }
 
-// ─── Hauptfunktion: Claude mit Schema-Validierung ───────────
+// ─── Main function: Claude with schema validation ───────────
 
 export interface ClaudeResult<T> {
   success: boolean;
@@ -167,51 +162,52 @@ export async function claudeWithValidation<T>(
   phase?: Phase,
   laisiHome?: string,
   cwd?: string,
+  allowedTools?: string[],
 ): Promise<ClaudeResult<T>> {
   let currentPrompt = prompt;
 
-  // Schema-Shape laden (wenn Phase + laisiHome angegeben)
+  // Load schema shape (if phase + laisiHome are provided)
   let shape: SchemaShape | undefined;
   if (phase && laisiHome) {
     try {
       shape = extractSchemaShape(join(laisiHome, "schemas", `${phase}.xsd`));
     } catch (err) {
-      log(`  ⚠️ Schema für ${phase} nicht ladbar, überspringe Strukturvalidierung`);
+      log(`  ⚠️ Schema for ${phase} not loadable, skipping structural validation`);
     }
   }
 
-  // Schema immer in den Prompt injizieren, damit Claude die Struktur von Anfang an kennt
+  // Always inject schema into the prompt so Claude knows the structure from the start
   if (shape) {
     currentPrompt = `${currentPrompt}
 
-## XSD-Schema (dein Output MUSS diesem Schema entsprechen)
+## XSD Schema (your output MUST conform to this schema)
 
 ${shape.schemaText}`;
   }
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    log(`  Claude-Aufruf (Versuch ${attempt}/${MAX_RETRIES})...`);
+    log(`  Claude call (attempt ${attempt}/${MAX_RETRIES})...`);
 
     try {
-      const raw = callClaude(currentPrompt, cwd);
+      const raw = callClaude(currentPrompt, cwd, allowedTools);
       const xml = extractXml(raw);
 
       // Well-formed?
       const validation = validateXml(xml);
       if (!validation.valid) {
-        log(`  ⚠️ XML ungültig: ${validation.error}`);
+        log(`  ⚠️ Invalid XML: ${validation.error}`);
 
         if (attempt < MAX_RETRIES) {
           const rootHint = shape
-            ? ` Das Root-Element muss <${shape.rootElement}> sein.`
+            ? ` The root element must be <${shape.rootElement}>.`
             : "";
           currentPrompt = `${prompt}
 
-DEIN VORHERIGER OUTPUT WAR UNGÜLTIGES XML:
+YOUR PREVIOUS OUTPUT WAS INVALID XML:
 ${validation.error}
 
-Bitte korrigiere und gib NUR valides XML aus. Keine Prosa davor oder danach.${rootHint}
-Beginne mit <?xml version="1.0" encoding="UTF-8"?>`;
+Please correct and output ONLY valid XML. No prose before or after.${rootHint}
+Start with <?xml version="1.0" encoding="UTF-8"?>`;
           continue;
         }
 
@@ -222,41 +218,41 @@ Beginne mit <?xml version="1.0" encoding="UTF-8"?>`;
       // Parsen
       const data = parseXml<T>(xml);
 
-      // Strukturelle Validierung (Root-Element + Pflicht-Kinder)
+      // Structural validation (root element + required children)
       if (shape) {
         const structural = validateStructure(data as Record<string, unknown>, shape);
         if (!structural.valid) {
           const errorList = structural.errors.join("\n- ");
-          log(`  ⚠️ Strukturfehler:\n- ${errorList}`);
+          log(`  ⚠️ Structural errors:\n- ${errorList}`);
 
           if (attempt < MAX_RETRIES) {
             currentPrompt = `${prompt}
 
-DEIN VORHERIGER OUTPUT HAT DIE FALSCHE XML-STRUKTUR:
+YOUR PREVIOUS OUTPUT HAD THE WRONG XML STRUCTURE:
 - ${errorList}
 
-Hier ist das vollständige XSD-Schema, dem dein Output entsprechen MUSS:
+Here is the complete XSD schema that your output MUST conform to:
 
 ${shape.schemaText}
 
-Gib NUR valides XML aus, das exakt diesem Schema entspricht.
-Beginne mit <?xml version="1.0" encoding="UTF-8"?>`;
+Output ONLY valid XML that exactly conforms to this schema.
+Start with <?xml version="1.0" encoding="UTF-8"?>`;
             continue;
           }
 
           writeFileSync(`${outputPath}.raw`, raw);
-          return { success: false, error: `Strukturfehler: ${structural.errors.join("; ")}` };
+          return { success: false, error: `Structural error: ${structural.errors.join("; ")}` };
         }
       }
 
       // XML speichern
       writeFileSync(outputPath, xml);
-      log(`  ✅ XML geschrieben: ${outputPath}`);
+      log(`  ✅ XML written: ${outputPath}`);
 
       return { success: true, data, rawXml: xml };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      log(`  ❌ Fehler: ${message}`);
+      log(`  ❌ Error: ${message}`);
 
       if (attempt === MAX_RETRIES) {
         return { success: false, error: message };
@@ -264,10 +260,10 @@ Beginne mit <?xml version="1.0" encoding="UTF-8"?>`;
     }
   }
 
-  return { success: false, error: "Max retries erreicht" };
+  return { success: false, error: "Max retries reached" };
 }
 
-// ─── Prompt-Template laden und Variablen ersetzen ───────────
+// ─── Load prompt template and substitute variables ──────────
 
 export function loadPrompt(
   promptPath: string,

@@ -13,6 +13,6 @@ export async function runAct(
   repoRoot: string,
   ctx: PhaseContext,
 ): Promise<void> {
-  log(`  Act-Phase für #${issueNr} – TODO`);
-  throw new Error("Act-Phase noch nicht implementiert");
+  log(`  Act phase for #${issueNr} – TODO`);
+  throw new Error("Act phase not yet implemented");
 }

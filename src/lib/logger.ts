@@ -1,5 +1,5 @@
 /**
- * Einfacher Logger – stdout + Logdatei
+ * Simple logger – stdout + log file
  */
 import { appendFileSync, mkdirSync } from "node:fs";
 import { dirname } from "node:path";

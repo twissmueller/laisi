@@ -1,5 +1,5 @@
 /**
- * `laisi status` – Zeigt den Zustand aller Issues
+ * `laisi status` – Shows the state of all issues
  */
 import { existsSync } from "node:fs";
 import { join } from "node:path";
@@ -17,7 +17,7 @@ export function status(_opts: StatusOptions): void {
   const states = scanAllIssues(issuesDir);
 
   if (states.length === 0) {
-    console.log("Keine Issues getrackt. Starte mit: laisi run");
+    console.log("No issues tracked. Start with: laisi run");
     return;
   }
 
@@ -27,11 +27,11 @@ export function status(_opts: StatusOptions): void {
     "Issue".padEnd(8) +
     "Phase".padEnd(12) +
     "Status".padEnd(18) +
-    "Nächster Schritt",
+    "Next Step",
   );
   console.log("─".repeat(65));
 
-  // Sort: Issues weiter im Workflow zuerst
+  // Sort: issues further along in the workflow first
   states.sort((a, b) => {
     const aOrd = a.latestPhase ? PHASE_ORDER[a.latestPhase] : 0;
     const bOrd = b.latestPhase ? PHASE_ORDER[b.latestPhase] : 0;
@@ -44,15 +44,15 @@ export function status(_opts: StatusOptions): void {
 
     let statusText: string;
     if (existsSync(join(issuesDir, String(state.issueNumber), "0-split.json"))) {
-      statusText = "🔀 aufgeteilt";
+      statusText = "🔀 split";
     } else if (state.latestFile?.suffix === "pending.xml") {
-      statusText = "⏳ wartet";
+      statusText = "⏳ waiting";
     } else if (state.latestFile?.suffix === "failed.xml") {
       statusText = "❌ failed";
     } else if (state.latestPhase === "release" && state.latestFile?.suffix === "xml") {
-      statusText = "✅ fertig";
+      statusText = "✅ done";
     } else {
-      statusText = "● aktiv";
+      statusText = "● active";
     }
     statusText = statusText.padEnd(18);
 
@@ -72,6 +72,6 @@ export function status(_opts: StatusOptions): void {
     (s) => s.latestPhase === "release" && s.latestFile?.suffix === "xml",
   ).length;
 
-  console.log(`${states.length} Issues: ${active} aktiv, ${waiting} wartend, ${done} fertig`);
+  console.log(`${states.length} issues: ${active} active, ${waiting} waiting, ${done} done`);
   console.log("");
 }

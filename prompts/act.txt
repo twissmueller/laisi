@@ -1,5 +1,5 @@
-TODO: Act-Phase Prompt definieren
+TODO: Define Act phase prompt
 
-Input: Check-Ergebnis (passed)
-Aufgabe: PR erstellen, Learnings dokumentieren, Rules/Skills updaten
-Output: act.xml mit PR-URL und dokumentierten Learnings
+Input: Check result (passed)
+Task: Create PR, document learnings, update rules/skills
+Output: act.xml with PR URL and documented learnings

@@ -25,10 +25,10 @@
           </xs:complexType>
         </xs:element>
 
-        <!-- Zusammenfassung des Vorhabens -->
+        <!-- Summary of the objective -->
         <xs:element name="context" type="xs:string"/>
 
-        <!-- Analyse der bestehenden Codebase -->
+        <!-- Analysis of the existing codebase -->
         <xs:element name="codebase_analysis">
           <xs:complexType>
             <xs:sequence>
@@ -40,7 +40,7 @@
           </xs:complexType>
         </xs:element>
 
-        <!-- Betroffene Dateien -->
+        <!-- Affected files -->
         <xs:element name="files">
           <xs:complexType>
             <xs:sequence>
@@ -72,7 +72,7 @@
           </xs:complexType>
         </xs:element>
 
-        <!-- Testplan -->
+        <!-- Test plan -->
         <xs:element name="test_plan">
           <xs:complexType>
             <xs:sequence>
@@ -98,7 +98,7 @@
           </xs:complexType>
         </xs:element>
 
-        <!-- Reihenfolge der Umsetzung -->
+        <!-- Implementation order -->
         <xs:element name="execution_order">
           <xs:complexType>
             <xs:sequence>
@@ -116,7 +116,7 @@
           </xs:complexType>
         </xs:element>
 
-        <!-- Machbarkeitscheck -->
+        <!-- Feasibility check -->
         <xs:element name="feasibility">
           <xs:complexType>
             <xs:sequence>
@@ -136,10 +136,10 @@
           </xs:complexType>
         </xs:element>
 
-        <!-- Optional: nur bei too_complex -->
+        <!-- Optional: only when too_complex -->
         <xs:element name="too_complex_reason" type="xs:string" minOccurs="0"/>
 
-        <!-- Kontext-Uebergabe an Do-Phase -->
+        <!-- Context handoff to the do phase -->
         <xs:element name="handoff" type="xs:string"/>
 
       </xs:sequence>

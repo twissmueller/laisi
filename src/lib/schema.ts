@@ -1,8 +1,8 @@
 /**
  * XSD Schema Parser
  *
- * Parst XSD-Dateien mit fast-xml-parser und extrahiert die erwartete
- * Struktur (Root-Element, required/optional Children) für Runtime-Validierung.
+ * Parses XSD files with fast-xml-parser and extracts the expected
+ * structure (root element, required/optional children) for runtime validation.
  */
 import { readFileSync } from "node:fs";
 import { XMLParser } from "fast-xml-parser";

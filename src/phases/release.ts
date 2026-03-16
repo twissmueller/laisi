@@ -13,6 +13,6 @@ export async function runRelease(
   repoRoot: string,
   ctx: PhaseContext,
 ): Promise<void> {
-  log(`  Release-Phase für #${issueNr} – TODO`);
-  throw new Error("Release-Phase noch nicht implementiert");
+  log(`  Release phase for #${issueNr} – TODO`);
+  throw new Error("Release phase not yet implemented");
 }

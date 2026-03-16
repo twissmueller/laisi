@@ -1,12 +1,12 @@
 /**
  * LAISI – Type Definitions
  *
- * Alle Typen die über Phasen-Grenzen hinweg verwendet werden.
- * Die XML-Schemas in /schemas/ sind die Single Source of Truth,
- * diese Typen sind das TypeScript-Äquivalent.
+ * All types used across phase boundaries.
+ * The XML schemas in /schemas/ are the single source of truth;
+ * these types are the TypeScript equivalent.
  */
 
-// ─── Phasen ─────────────────────────────────────────────────
+// ─── Phases ─────────────────────────────────────────────────
 
 export const PHASES = [
   "explore",
@@ -28,11 +28,11 @@ export const PHASE_ORDER: Record<Phase, number> = {
   release: 6,
 };
 
-// ─── Datei-Suffixe ──────────────────────────────────────────
+// ─── File suffixes ──────────────────────────────────────────
 
 export type FileSuffix = "xml" | "pending.xml" | "failed.xml";
 
-// ─── Issue-State (abgeleitet aus Dateisystem) ───────────────
+// ─── Issue state (derived from filesystem) ──────────────────
 
 export interface IssueState {
   issueNumber: number;
@@ -59,7 +59,7 @@ export interface Action {
   priority: number; // Lower = higher priority
 }
 
-// ─── Explore-Phase Typen ────────────────────────────────────
+// ─── Explore phase types ────────────────────────────────────
 
 export type ExploreStatus = "complete" | "needs_clarification" | "too_complex" | "splits_confirmed";
 
@@ -123,7 +123,7 @@ export interface ExploreResult {
   handoff: string;
 }
 
-// ─── Plan-Phase Typen ───────────────────────────────────────
+// ─── Plan phase types ───────────────────────────────────────
 
 export type PlanStatus = "complete" | "too_complex";
 
@@ -178,14 +178,28 @@ export interface PlanResult {
   handoff: string;
 }
 
-// ─── Do-Phase Typen (TODO) ──────────────────────────────────
+// ─── Do phase types ─────────────────────────────────────────
+
+export interface DoChangedFile {
+  path: string;
+  action: "created" | "modified" | "deleted";
+  summary: string;
+}
+
+export interface DoTestResult {
+  file: string;
+  passed: boolean;
+  output: string;
+}
 
 export interface DoResult {
   meta: { issue: number; date: string; iteration: number };
+  changed_files: { file: DoChangedFile[] };
+  test_results?: { test: DoTestResult[] };
   handoff: string;
 }
 
-// ─── Check-Phase Typen (TODO) ───────────────────────────────
+// ─── Check phase types (TODO) ───────────────────────────────
 
 export interface CheckResult {
   meta: {
@@ -197,7 +211,7 @@ export interface CheckResult {
   handoff: string;
 }
 
-// ─── Act-Phase Typen (TODO) ─────────────────────────────────
+// ─── Act phase types (TODO) ─────────────────────────────────
 
 export interface ActResult {
   meta: {
@@ -209,16 +223,30 @@ export interface ActResult {
   handoff: string;
 }
 
-// ─── Release-Phase Typen (TODO) ─────────────────────────────
+// ─── Release phase types (TODO) ─────────────────────────────
 
 export interface ReleaseResult {
   meta: { issue: number; date: string; iteration: number };
   handoff: string;
 }
 
-// ─── Phase-Kontext (wird von CLI an jede Phase übergeben) ───
+// ─── Project configuration (.laisi.yml) ─────────────────────
+
+export interface LaisiConfig {
+  preferences?: {
+    languages?: string[];
+    forbidden?: string[];
+    apis?: string[];
+    notes?: string;
+  };
+  plan_review?: boolean;
+}
+
+// ─── Phase context (passed from CLI to each phase) ─────────
 
 export interface PhaseContext {
-  /** Pfad zum LAISI-Installationsverzeichnis (enthält schemas/, prompts/) */
+  /** Path to the LAISI installation directory (contains schemas/, prompts/) */
   laisiHome: string;
+  /** Project configuration from .laisi.yml (empty if file is missing) */
+  config: LaisiConfig;
 }

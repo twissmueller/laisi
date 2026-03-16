@@ -1,11 +1,11 @@
 /**
- * `laisi run` – Ein Trigger. Ein Schritt. Exit.
+ * `laisi run` – One trigger. One step. Exit.
  *
  * 1. git pull
- * 2. Neue Issues entdecken
- * 3. Alle Issues scannen, Aktionen bestimmen
- * 4. Beste Aktion auswählen (höchste Priorität)
- * 5. Phase ausführen
+ * 2. Discover new issues
+ * 3. Scan all issues, determine actions
+ * 4. Select best action (highest priority)
+ * 5. Execute phase
  * 6. git commit + push
  * 7. Exit
  */
@@ -22,9 +22,10 @@ import {
   fetchIssue,
 } from "../lib/github.js";
 import { scanAllIssues, ensureIssueDir } from "../lib/state.js";
+import { loadConfig } from "../lib/config.js";
 import type { Action } from "../types.js";
 
-// ── Phase-Handler ──
+// ── Phase Handlers ──
 import { runExplore } from "../phases/explore.js";
 import { runPlan } from "../phases/plan.js";
 import { runDo } from "../phases/do.js";
@@ -48,7 +49,7 @@ export async function run(opts: RunOptions): Promise<void> {
 
   // ── Lock ──
   if (existsSync(lockPath)) {
-    log("⏸ Läuft bereits, exit.");
+    log("⏸ Already running, exit.");
     return;
   }
   writeFileSync(lockPath, String(process.pid));
@@ -62,20 +63,20 @@ export async function run(opts: RunOptions): Promise<void> {
     // ── 1. Git Pull ──
     gitPull();
 
-    // ── 2. Neue Issues entdecken ──
+    // ── 2. Discover new issues ──
     const assignedIssues = listAssignedIssues();
     for (const nr of assignedIssues) {
       const issueDir = ensureIssueDir(issuesDir, nr);
       const jsonPath = join(issueDir, "0-issue.json");
 
       if (!existsSync(jsonPath)) {
-        log(`🆕 Issue #${nr} entdeckt`);
+        log(`🆕 Issue #${nr} discovered`);
         const issueData = fetchIssue(nr);
         writeFileSync(jsonPath, JSON.stringify(issueData, null, 2));
       }
     }
 
-    // ── 3. Alle Issues scannen ──
+    // ── 3. Scan all issues ──
     const states = scanAllIssues(issuesDir);
     const actions: Action[] = states
       .map((s) => s.nextAction)
@@ -83,20 +84,20 @@ export async function run(opts: RunOptions): Promise<void> {
 
     if (actions.length === 0) {
       if (states.length === 0 && assignedIssues.length === 0) {
-        log("😴 Nichts zu tun. Keine Issues gefunden.");
-        log("   → Erstelle ein GitHub Issue und weise es dir zu (`gh issue create --assignee @me`).");
+        log("😴 Nothing to do. No issues found.");
+        log("   → Create a GitHub issue and assign it to yourself (`gh issue create --assignee @me`).");
       } else {
-        log("😴 Nichts zu tun. Alle Issues warten auf externen Input.");
+        log("😴 Nothing to do. All issues are waiting for external input.");
       }
       return;
     }
 
-    // ── 4. Beste Aktion auswählen ──
+    // ── 4. Select best action ──
     let best: Action;
     if (opts.issueNumber) {
       const match = actions.find((a) => a.issueNumber === opts.issueNumber);
       if (!match) {
-        log(`❌ Keine Aktion für Issue #${opts.issueNumber} gefunden.`);
+        log(`❌ No action found for issue #${opts.issueNumber}.`);
         return;
       }
       best = match;
@@ -108,16 +109,17 @@ export async function run(opts: RunOptions): Promise<void> {
     log(`🚀 #${best.issueNumber} → ${best.phase} (${best.reason})`);
 
     if (opts.dryRun) {
-      log("🏜️  Dry-run Modus. Anstehende Aktionen:");
+      log("🏜️  Dry-run mode. Pending actions:");
       for (const a of actions) {
         log(`   - #${a.issueNumber} → ${a.phase} (${a.reason})`);
       }
       return;
     }
 
-    // ── 5. Phase ausführen ──
+    // ── 5. Execute phase ──
     const issueDir = join(issuesDir, String(best.issueNumber));
-    const phaseCtx = { laisiHome: opts.laisiHome };
+    const config = loadConfig(repoRoot);
+    const phaseCtx = { laisiHome: opts.laisiHome, config };
 
     switch (best.phase) {
       case "explore": await runExplore(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
@@ -129,6 +131,9 @@ export async function run(opts: RunOptions): Promise<void> {
     }
 
     // ── 6. Commit & Push ──
+    if (best.phase === "do") {
+      gitAdd(repoRoot); // Stage code changes made by Claude
+    }
     gitAdd(issueDir);
     gitCommit(`issue-${best.issueNumber}: ${best.phase}`);
     gitPush();

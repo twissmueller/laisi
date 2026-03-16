@@ -1,5 +1,5 @@
 /**
- * GitHub CLI und Git Wrapper
+ * GitHub CLI and Git Wrapper
  */
 import { execSync } from "node:child_process";
 import { writeFileSync, unlinkSync } from "node:fs";
@@ -68,7 +68,7 @@ export function fetchIssue(nr: number): GhIssue {
     );
     return JSON.parse(raw);
   } catch {
-    throw new Error(`Issue #${nr} nicht gefunden. Existiert es in diesem Repo?`);
+    throw new Error(`Issue #${nr} not found. Does it exist in this repo?`);
   }
 }
 
@@ -92,7 +92,7 @@ export function hasNewCommentsSince(nr: number, sinceTimestamp: number): boolean
 }
 
 export function updateIssueBody(nr: number, body: string): void {
-  // --body-file statt --body um Shell-Escaping-Probleme zu vermeiden
+  // --body-file instead of --body to avoid shell escaping issues
   const tmpPath = join(tmpdir(), `laisi-issue-${nr}-${Date.now()}.md`);
   writeFileSync(tmpPath, body);
   try {
@@ -102,7 +102,7 @@ export function updateIssueBody(nr: number, body: string): void {
   }
 }
 
-// ─── Issue-Erstellung und -Verwaltung ───────────────────────
+// ─── Issue creation and management ──────────────────────────
 
 export interface CreatedIssue {
   number: number;
@@ -110,7 +110,7 @@ export interface CreatedIssue {
 }
 
 export function createIssue(title: string, body: string): CreatedIssue {
-  // --body-file um Shell-Escaping-Probleme zu vermeiden (wie updateIssueBody)
+  // --body-file to avoid shell escaping issues (like updateIssueBody)
   const tmpPath = join(tmpdir(), `laisi-issue-create-${Date.now()}.md`);
   writeFileSync(tmpPath, body);
   try {

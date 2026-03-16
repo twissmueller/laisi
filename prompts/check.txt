@@ -1,5 +1,5 @@
-TODO: Check-Phase Prompt definieren
+TODO: Define Check phase prompt
 
-Input: Do-Ergebnis + aktueller Code
-Aufgabe: Lint, Test, Security Scan, AI Code Review
-Output: check.xml mit Ergebnissen (passed/failed)
+Input: Do result + current code
+Task: Lint, test, security scan, AI code review
+Output: check.xml with results (passed/failed)

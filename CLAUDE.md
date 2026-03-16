@@ -1,21 +1,21 @@
 # LAISI – Let AI Supervise Itself
 
 > Issue-driven AI Development Pipeline.
-> Jedes Issue durchläuft 6 Phasen, jede Phase hat einen eigenen Agenten.
+> Each issue passes through 6 phases, each phase has its own agent.
 
 ## Dispatch
 
-Wenn du eine Aufgabe in diesem Projekt ausführen sollst, folge diesem Baum:
+When you need to execute a task in this project, follow this tree:
 
 ```
-Was soll ich tun?
+What should I do?
 │
-├── Ein Issue bearbeiten (laisi run)?
+├── Work on an issue (laisi run)?
 │   │
-│   ├── 1. Lies: agents/dispatcher.md
-│   │      → Der Dispatcher bestimmt WELCHES Issue und WELCHE Phase.
+│   ├── 1. Read: agents/dispatcher.md
+│   │      → The dispatcher determines WHICH issue and WHICH phase.
 │   │
-│   └── 2. Der Dispatcher leitet dich zum richtigen Phase-Agenten:
+│   └── 2. The dispatcher routes you to the correct phase agent:
 │          │
 │          ├── Explore  → agents/explore.md
 │          ├── Plan     → agents/plan.md
@@ -24,88 +24,88 @@ Was soll ich tun?
 │          ├── Act      → agents/act.md
 │          └── Release  → agents/release.md
 │
-├── Status abfragen (laisi status)?
-│   └── Lies: src/commands/status.ts
+├── Query status (laisi status)?
+│   └── Read: src/commands/status.ts
 │
-├── Am Framework selbst arbeiten?
-│   └── Lies: ARCHITECTURE.md (unten)
+├── Work on the framework itself?
+│   └── Read: ARCHITECTURE.md (below)
 │
-└── Roadmap / Was fehlt noch?
-    └── Lies: ROADMAP.md
+└── Roadmap / What's missing?
+    └── Read: ROADMAP.md
 ```
 
-## Agenten-Übersicht
+## Agent Overview
 
-| Agent      | Datei                  | Aufgabe                                   |
+| Agent      | File                   | Task                                      |
 |------------|------------------------|-------------------------------------------|
-| Dispatcher | `agents/dispatcher.md` | Issue + Phase bestimmen                   |
-| Explore    | `agents/explore.md`    | Requirements extrahieren + Quality Gates  |
-| Plan       | `agents/plan.md`       | Umsetzungsplan für eine Claude-Session    |
-| Do         | `agents/do.md`         | Code implementieren                       |
-| Check      | `agents/check.md`      | Lint, Test, AI Code Review                |
-| Act        | `agents/act.md`        | PR erstellen, Learnings dokumentieren     |
-| Release    | `agents/release.md`    | Tag, Changelog, Deploy                    |
+| Dispatcher | `agents/dispatcher.md` | Determine issue + phase                   |
+| Explore    | `agents/explore.md`    | Extract requirements + quality gates      |
+| Plan       | `agents/plan.md`       | Implementation plan for a Claude session  |
+| Do         | `agents/do.md`         | Implement code                            |
+| Check      | `agents/check.md`      | Lint, test, AI code review                |
+| Act        | `agents/act.md`        | Create PR, document learnings             |
+| Release    | `agents/release.md`    | Tag, changelog, deploy                    |
 
-Jeder Agent hat:
-- **Identität** – Wer bin ich, was ist meine Rolle?
-- **Input** – Welche Dateien lese ich?
-- **Output** – Welche Datei produziere ich (Schema-Referenz)?
-- **Regeln** – Was muss ich beachten?
-- **Human Gate** – Wann warte ich auf einen Menschen?
+Each agent has:
+- **Identity** – Who am I, what is my role?
+- **Input** – Which files do I read?
+- **Output** – Which file do I produce (schema reference)?
+- **Rules** – What must I follow?
+- **Human Gate** – When do I wait for a human?
 
 ---
 
-## ARCHITECTURE.md (für Framework-Entwicklung)
+## ARCHITECTURE.md (for framework development)
 
-### Verzeichnisstruktur
+### Directory Structure
 
 ```
-agents/                       ← Agenten-Definitionen (Markdown)
-schemas/                      ← XSD-Schemas (Vertrag für Agent-Outputs)
-prompts/                      ← Prompt-Templates (werden von Agents geladen)
+agents/                       ← Agent definitions (Markdown)
+schemas/                      ← XSD schemas (contract for agent outputs)
+prompts/                      ← Prompt templates (loaded by agents)
 src/
-  cli.ts                      ← CLI Entry Point
-  types.ts                    ← Typdefinitionen (sync mit Schemas!)
+  cli.ts                      ← CLI entry point
+  types.ts                    ← Type definitions (sync with schemas!)
   commands/
-    run.ts                    ← Orchestrator: ein Trigger, ein Schritt, Exit
-    status.ts                 ← Übersicht aller Issues
-    init.ts                   ← .issues/ initialisieren
+    run.ts                    ← Orchestrator: one trigger, one step, exit
+    status.ts                 ← Overview of all issues
+    init.ts                   ← Initialize .issues/
   lib/
-    state.ts                  ← Dateisystem → State + Action-Bestimmung
-    claude.ts                 ← Claude-Aufruf mit XML-Validierung + Retry
-    github.ts                 ← Git + gh CLI Wrapper
+    state.ts                  ← Filesystem → state + action determination
+    claude.ts                 ← Claude invocation with XML validation + retry
+    github.ts                 ← Git + gh CLI wrapper
     logger.ts                 ← Logger
   phases/
-    explore.ts … release.ts   ← Phase-Handler (rufen Claude mit Prompt auf)
+    explore.ts … release.ts   ← Phase handlers (call Claude with prompt)
 ```
 
-### Datei-Konventionen im Projekt-Repo
+### File Conventions in the Project Repo
 
 ```
 .issues/{nr}/
-  0-issue.json                 ← Rohdaten vom GitHub Issue
-  1-explore-{iter}.xml         ← Explore abgeschlossen
-  1-explore-{iter}.pending.xml ← Wartet auf Mensch
+  0-issue.json                 ← Raw data from GitHub issue
+  1-explore-{iter}.xml         ← Explore completed
+  1-explore-{iter}.pending.xml ← Waiting for human
   2-plan-{iter}.xml
   3-do-{iter}.xml
-  4-check-{iter}.xml           ← Check bestanden
-  4-check-{iter}.failed.xml    ← Check fehlgeschlagen → Replan
+  4-check-{iter}.xml           ← Check passed
+  4-check-{iter}.failed.xml    ← Check failed → replan
   5-act-{iter}.xml
-  6-release-{iter}.xml         ← Fertig
+  6-release-{iter}.xml         ← Done
 ```
 
-Höchste Iteration zählt. Suffix bestimmt Status.
+Highest iteration counts. Suffix determines status.
 
-### Prinzipien
+### Principles
 
-- **Ein Trigger, ein Schritt, Exit.**
-- **Dateien sind State.** `ls .issues/42/` ist das Dashboard.
-- **Schemas sind der Vertrag.** Agent-Output wird validiert.
-- **Kontext-Isolation.** Jeder Agent bekommt nur das Übergabe-XML der Vorphase.
-- **Drei Artefakte pro Phase:** `schemas/{phase}.xsd`, `prompts/{phase}.txt`,
-  `src/phases/{phase}.ts` – immer zusammen ändern.
+- **One trigger, one step, exit.**
+- **Files are state.** `ls .issues/42/` is the dashboard.
+- **Schemas are the contract.** Agent output is validated.
+- **Context isolation.** Each agent only receives the handoff XML from the previous phase.
+- **Three artifacts per phase:** `schemas/{phase}.xsd`, `prompts/{phase}.txt`,
+  `src/phases/{phase}.ts` – always change together.
 
-### Abhängigkeiten
+### Dependencies
 
 - Node.js 20+ · `gh` CLI · `claude` CLI · `fast-xml-parser`
 
@@ -113,5 +113,5 @@ Höchste Iteration zählt. Suffix bestimmt Status.
 
 ```bash
 cd ~/projects/laisi && npm install && npm run build && npm link
-# Dann in jedem Projekt: laisi init && laisi
+# Then in any project: laisi init && laisi
 ```

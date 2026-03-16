@@ -19,7 +19,7 @@ import { status } from "./commands/status.js";
 import { init } from "./commands/init.js";
 
 
-// ── LAISI's eigenes Verzeichnis (für schemas/ und prompts/) ──
+// ── LAISI's own directory (for schemas/ and prompts/) ──
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 export const LAISI_HOME = resolve(__dirname, "..");
@@ -67,7 +67,7 @@ switch (command) {
     break;
 
   default:
-    console.error(`Unbekannter Befehl: ${command}\n`);
+    console.error(`Unknown command: ${command}\n`);
     printHelp();
     process.exit(1);
 }

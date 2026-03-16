@@ -1,5 +1,5 @@
 /**
- * `laisi init` – Initialisiert .issues/ im aktuellen Repo
+ * `laisi init` – Initializes .issues/ in the current repo
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -10,20 +10,20 @@ export function init(): void {
   const issuesDir = join(repoRoot, ".issues");
 
   if (existsSync(issuesDir)) {
-    console.log(`✅ .issues/ existiert bereits in ${repoRoot}`);
+    console.log(`✅ .issues/ already exists in ${repoRoot}`);
     return;
   }
 
   mkdirSync(issuesDir, { recursive: true });
 
-  // .gitkeep damit das Verzeichnis in git getrackt wird
+  // .gitkeep so the directory is tracked in git
   writeFileSync(join(issuesDir, ".gitkeep"), "");
 
-  console.log(`✅ .issues/ angelegt in ${repoRoot}`);
+  console.log(`✅ .issues/ created in ${repoRoot}`);
   console.log("");
-  console.log("Nächste Schritte:");
-  console.log("  1. Stelle sicher dass du GitHub Issues hast die dir zugewiesen sind");
-  console.log("  2. Starte mit: laisi run");
+  console.log("Next steps:");
+  console.log("  1. Make sure you have GitHub issues assigned to you");
+  console.log("  2. Start with: laisi run");
   console.log("");
-  console.log("Optional: .laisi.yml für projektspezifische Konfiguration anlegen.");
+  console.log("Optional: create .laisi.yml for project-specific configuration.");
 }

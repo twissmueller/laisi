@@ -1,10 +1,11 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- TODO: Do-Phase Schema definieren -->
 <xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
 
   <xs:element name="do">
     <xs:complexType>
       <xs:sequence>
+
+        <!-- Meta -->
         <xs:element name="meta">
           <xs:complexType>
             <xs:sequence>
@@ -14,8 +15,52 @@
             </xs:sequence>
           </xs:complexType>
         </xs:element>
-        <!-- TODO: changed_files, test_results, etc. -->
+
+        <!-- Changed files -->
+        <xs:element name="changed_files">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="file" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="path" type="xs:string"/>
+                    <xs:element name="action">
+                      <xs:simpleType>
+                        <xs:restriction base="xs:string">
+                          <xs:enumeration value="created"/>
+                          <xs:enumeration value="modified"/>
+                          <xs:enumeration value="deleted"/>
+                        </xs:restriction>
+                      </xs:simpleType>
+                    </xs:element>
+                    <xs:element name="summary" type="xs:string"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Test results (optional) -->
+        <xs:element name="test_results" minOccurs="0">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="test" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="file" type="xs:string"/>
+                    <xs:element name="passed" type="xs:boolean"/>
+                    <xs:element name="output" type="xs:string"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+
+        <!-- Context handoff to the check phase -->
         <xs:element name="handoff" type="xs:string"/>
+
       </xs:sequence>
     </xs:complexType>
   </xs:element>

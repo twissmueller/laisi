@@ -1,8 +1,8 @@
 /**
  * Filesystem-based State Management
  *
- * Liest den Workflow-Zustand aus dem .issues/ Verzeichnis.
- * Keine Datenbank, keine state.json – die Dateien SIND der State.
+ * Reads the workflow state from the .issues/ directory.
+ * No database, no state.json – the files ARE the state.
  */
 import { readdirSync, statSync, existsSync, mkdirSync } from "node:fs";
 import { join, basename } from "node:path";
@@ -16,7 +16,7 @@ import type {
 import { PHASE_ORDER } from "../types.js";
 import { hasNewCommentsSince, isPrMerged } from "./github.js";
 
-// ─── Dateinamen parsen ──────────────────────────────────────
+// ─── Parse filenames ────────────────────────────────────────
 
 const FILE_PATTERN = /^(\d)-(explore|plan|do|check|act|release)-(\d+)\.(xml|pending\.xml|failed\.xml)$/;
 
@@ -33,7 +33,7 @@ export function parseIssueFile(filename: string, dir: string): IssueFile | null 
   };
 }
 
-// ─── Issue-State aus Dateisystem lesen ──────────────────────
+// ─── Read issue state from filesystem ───────────────────────
 
 export function readIssueState(issueDir: string): IssueState {
   const nr = parseInt(basename(issueDir), 10);
@@ -63,7 +63,7 @@ export function readIssueState(issueDir: string): IssueState {
   return { issueNumber: nr, files, latestPhase, latestFile, nextAction };
 }
 
-// ─── Höchste Datei einer Phase finden ───────────────────────
+// ─── Find latest file of a phase ────────────────────────────
 
 export function latestOfPhase(files: IssueFile[], phase: Phase): IssueFile | null {
   const phaseFiles = files.filter((f) => f.phase === phase);
@@ -71,17 +71,17 @@ export function latestOfPhase(files: IssueFile[], phase: Phase): IssueFile | nul
   return phaseFiles.reduce((a, b) => (a.iteration > b.iteration ? a : b));
 }
 
-// ─── Nächste Aktion bestimmen ───────────────────────────────
+// ─── Determine next action ──────────────────────────────────
 
 function determineAction(
   nr: number,
   files: IssueFile[],
   issueDir: string,
 ): Action | null {
-  // Kein 0-issue.json? Kann nicht weitermachen.
+  // No 0-issue.json? Cannot proceed.
   if (!existsSync(join(issueDir, "0-issue.json"))) return null;
 
-  // Aufgeteilt? Sub-Issues laufen eigenständig.
+  // Split? Sub-issues run independently.
   if (existsSync(join(issueDir, "0-split.json"))) return null;
 
   const latestExplore = latestOfPhase(files, "explore");
@@ -91,11 +91,11 @@ function determineAction(
   const latestAct = latestOfPhase(files, "act");
   const latestRelease = latestOfPhase(files, "release");
 
-  // ── Fertig? ──
+  // ── Done? ──
   if (latestRelease?.suffix === "xml") return null;
 
-  // ── Pending? Warten oder weiter ──
-  // Nur pending-Dateien beachten, die NICHT durch eine spätere completed-Datei überholt sind
+  // ── Pending? Wait or continue ──
+  // Only consider pending files that are NOT superseded by a later completed file
   const pendingFile = files.find((f) => {
     if (f.suffix !== "pending.xml") return false;
     return !files.some(c => c.phase === f.phase && c.suffix === "xml" && c.iteration > f.iteration);
@@ -106,11 +106,11 @@ function determineAction(
       return {
         issueNumber: nr,
         phase: pendingFile.phase,
-        reason: `Neue Antwort auf ${pendingFile.phase} Rückfragen`,
+        reason: `New response to ${pendingFile.phase} follow-up questions`,
         priority: priorityOf(pendingFile.phase),
       };
     }
-    return null; // Noch warten
+    return null; // Still waiting
   }
 
   // ── Check failed? → Replan ──
@@ -118,54 +118,54 @@ function determineAction(
     return {
       issueNumber: nr,
       phase: "plan",
-      reason: `Check fehlgeschlagen (Iteration ${latestCheck.iteration}), Replan nötig`,
+      reason: `Check failed (iteration ${latestCheck.iteration}), replan needed`,
       priority: priorityOf("plan"),
     };
   }
 
-  // ── Normale Reihenfolge: welche Phase fehlt? ──
+  // ── Normal order: which phase is missing? ──
   if (!latestExplore || latestExplore.suffix !== "xml") {
-    return { issueNumber: nr, phase: "explore", reason: "Explore noch nicht durchgeführt", priority: priorityOf("explore") };
+    return { issueNumber: nr, phase: "explore", reason: "Explore not yet performed", priority: priorityOf("explore") };
   }
   if (!latestPlan || latestPlan.suffix !== "xml") {
-    return { issueNumber: nr, phase: "plan", reason: "Plan noch nicht erstellt", priority: priorityOf("plan") };
+    return { issueNumber: nr, phase: "plan", reason: "Plan not yet created", priority: priorityOf("plan") };
   }
   if (!latestDo || latestDo.suffix !== "xml") {
-    return { issueNumber: nr, phase: "do", reason: "Implementierung steht aus", priority: priorityOf("do") };
+    return { issueNumber: nr, phase: "do", reason: "Implementation pending", priority: priorityOf("do") };
   }
   if (!latestCheck || latestCheck.suffix !== "xml") {
-    return { issueNumber: nr, phase: "check", reason: "Check noch nicht durchgeführt", priority: priorityOf("check") };
+    return { issueNumber: nr, phase: "check", reason: "Check not yet performed", priority: priorityOf("check") };
   }
   if (!latestAct || latestAct.suffix !== "xml") {
-    return { issueNumber: nr, phase: "act", reason: "PR noch nicht erstellt", priority: priorityOf("act") };
+    return { issueNumber: nr, phase: "act", reason: "PR not yet created", priority: priorityOf("act") };
   }
 
-  // Act da, aber Release fehlt → PR muss erst gemerged werden
+  // Act done, but release missing → PR must be merged first
   if (latestAct.suffix === "xml" && !latestRelease) {
     if (isPrMerged(nr)) {
-      return { issueNumber: nr, phase: "release", reason: "PR gemerged, Release steht aus", priority: priorityOf("release") };
+      return { issueNumber: nr, phase: "release", reason: "PR merged, release pending", priority: priorityOf("release") };
     }
-    return null; // Warten auf PR-Merge
+    return null; // Waiting for PR merge
   }
 
   return null;
 }
 
-// ─── Priorität: Issues weiter im Workflow bevorzugen ────────
+// ─── Priority: prefer issues further along in the workflow ──
 
 function priorityOf(phase: Phase): number {
-  // Umgekehrt: release=1 (höchste Prio), explore=6
+  // Inverted: release=1 (highest priority), explore=6
   return 7 - PHASE_ORDER[phase];
 }
 
-// ─── Nächste Iteration für eine Phase ───────────────────────
+// ─── Next iteration for a phase ─────────────────────────────
 
 export function nextIteration(files: IssueFile[], phase: Phase): number {
   const latest = latestOfPhase(files, phase);
   return latest ? latest.iteration + 1 : 1;
 }
 
-// ─── Alle Issues scannen ────────────────────────────────────
+// ─── Scan all issues ────────────────────────────────────────
 
 export function scanAllIssues(issuesDir: string): IssueState[] {
   if (!existsSync(issuesDir)) return [];
@@ -175,7 +175,7 @@ export function scanAllIssues(issuesDir: string): IssueState[] {
     .map((name) => readIssueState(join(issuesDir, name)));
 }
 
-// ─── Issues-Verzeichnis sicherstellen ───────────────────────
+// ─── Ensure issues directory exists ─────────────────────────
 
 export function ensureIssueDir(issuesDir: string, nr: number): string {
   const dir = join(issuesDir, String(nr));
