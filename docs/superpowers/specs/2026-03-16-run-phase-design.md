@@ -75,12 +75,20 @@ interface PhaseDefinition {
   schema: string;
   prompt: string;
   max_retries: number;
-  human_gate?: "on_ambiguous" | "always" | "on_failure";
+  human_gate?: HumanGateConfig;
+  tools?: string[];       // Claude tools (e.g. ["Edit","Write","Read","Bash","Glob","Grep"])
+  cwd?: string;           // Working directory for Claude (e.g. "repo_root")
 }
+
+type HumanGateConfig =
+  | "always"
+  | "on_failure"
+  | { on_field: string; value: string };  // e.g. { on_field: "ambiguous", value: "true" }
 
 interface PhaseResult {
   success: boolean;
   outputPath?: string;
+  data?: Record<string, unknown>;  // Parsed XML for orchestrator inspection
   error?: string;
 }
 
@@ -88,8 +96,31 @@ async function runPhase(
   phase: PhaseDefinition,
   issueDir: string,
   laisiHome: string,
+  repoRoot: string,
 ): Promise<PhaseResult>
 ```
+
+**Tool-using phases:** Some phases (e.g., an implementation phase) need Claude to modify
+source files. These declare `tools` and `cwd` in the YAML. `runPhase()` passes them through
+to `callClaude()`. The phase still produces an output XML (e.g., a manifest of changes),
+and the orchestrator handles git staging/committing afterward. The tools and side effects
+are Claude's, not `runPhase()`'s — the function itself still only writes one XML file.
+
+**YAML example with tools:**
+```yaml
+  - id: implement
+    description: Execute the plan by modifying source code
+    input:  2-scope.xml
+    output: 3-implement.xml
+    schema: schemas/implement.xsd
+    prompt: prompts/03-implement.md
+    max_retries: 1
+    tools: [Edit, Write, Read, Bash, Glob, Grep]
+    cwd: repo_root
+```
+
+The `cwd: repo_root` value is resolved by the orchestrator to the actual repo path
+before calling `runPhase()`.
 
 **Flow (from spec):**
 
@@ -115,13 +146,29 @@ async function runPhase(
 
 ### 4. Human Gate Handling
 
-After `runPhase()` returns successfully, the orchestrator inspects the `human_gate` field:
+After `runPhase()` returns successfully, the orchestrator inspects the `human_gate` field
+using the parsed `data` from `PhaseResult`:
 
 - `"always"` — Rename output to `.pending` suffix. Next run waits for human approval.
-- `"on_ambiguous"` — Parse output XML, check for a trigger field
-  (e.g., `<ambiguous>true</ambiguous>`). If triggered, rename to `.pending`.
+- `{ on_field: "ambiguous", value: "true" }` — Look up the field path in the parsed XML.
+  If the field exists and matches the value, rename to `.pending`. The field path uses
+  dot notation relative to the root element (e.g., `"ambiguous"` checks `<root><ambiguous>`).
 - `"on_failure"` — Only gates on retry exhaustion (the `.gate.xml` from step 4).
 - Not set — No gate, proceed to next phase on next run.
+
+**YAML example:**
+```yaml
+    human_gate:
+      on_field: ambiguous
+      value: "true"
+```
+
+**File suffixes:**
+- `.pending` — Human approval needed (from `"always"` or `on_field` trigger).
+  Filename: `{output}.pending` (e.g., `1-intent.xml.pending`).
+- `.gate` — Retry exhaustion (3 failed attempts).
+  Filename: `{output}.gate` (e.g., `1-intent.xml.gate`).
+  Contains: phase ID, last LLM output, last validation error as XML.
 
 ### 5. Schema Module Rewrite (`src/lib/schema.ts`)
 
@@ -142,6 +189,14 @@ function extractSchemaShape(xsdPath: string): SchemaShape
 
 Rewritten with full recursive traversal. Returns root element, required/optional
 children at all nesting levels, and raw schema text.
+
+```typescript
+function getArrayElements(xsdPath: string): string[]
+```
+
+Returns element names that have `maxOccurs="unbounded"` in the schema. Used to configure
+the XML parser's `isArray` callback dynamically per phase, replacing the current hardcoded
+list in `claude.ts`.
 
 ### 6. Claude Module Cleanup (`src/lib/claude.ts`)
 
@@ -185,19 +240,35 @@ Walks `workflow.phases` in order. For each phase:
 No regex filename parsing. No `PHASE_ORDER` map. No priority scores.
 The YAML order is the execution order.
 
+**Iteration and re-execution:** Workflow definitions are strictly linear — no loops or
+branching. If a phase needs to be re-executed (e.g., after human feedback), the orchestrator
+deletes the `.pending` suffix, making the output file the completed artifact, and the
+workflow continues forward. If a workflow needs a "check failed → replan" loop, this is
+modeled as separate phases in the YAML (e.g., a `verify` phase whose failure creates a
+new issue or triggers a different workflow). The current iteration numbering
+(`1-explore-1.xml`, `1-explore-2.xml`) is dropped — each phase has exactly one output filename.
+
 ### 8. Orchestrator Simplification (`src/commands/run.ts`)
 
 ```
 1. Read .laisi.yml → get workflow name
 2. Load {laisiHome}/workflows/{workflow}.yml
 3. Discover issues (from GitHub, create 0-issue.json)
+   Note: 0-issue.json creation is an orchestrator responsibility,
+   outside the workflow. It produces the seed file that the first
+   phase's `input` references.
 4. For each issue: scanIssue(issueDir, workflow)
 5. Pick highest-priority issue with a nextPhase
-6. Call runPhase(nextPhase, issueDir, laisiHome)
-7. Handle human_gate (rename to .pending if needed)
-8. Commit & push
-9. Exit (one trigger, one step)
+6. Resolve phase config (e.g., cwd: "repo_root" → actual path)
+7. Call runPhase(nextPhase, issueDir, laisiHome, repoRoot)
+8. Handle human_gate (rename to .pending if triggered)
+9. If phase had tools: git add + commit changed files
+10. Commit & push
+11. Exit (one trigger, one step)
 ```
+
+`laisiHome` resolution is unchanged — it comes from the CLI entry point (`src/cli.ts`)
+which resolves it relative to the LAISI installation directory.
 
 ### 9. Workflow Module (`src/lib/workflow.ts`)
 
@@ -241,8 +312,8 @@ against `laisiHome`.
 - `src/commands/init.ts` (minor update for `--workflow` flag)
 - `src/commands/status.ts` (minor update to use workflow definitions)
 
-**New dependency:**
-- `js-yaml` for parsing workflow YAML
+**Existing dependency (no new addition):**
+- `yaml` (already in package.json, used by `src/lib/config.ts`) for parsing workflow YAML
 
 ### 11. Principles
 
