@@ -150,3 +150,85 @@ function collectArrayElements(obj: unknown, arrays: string[]): void {
     collectArrayElements(value, arrays);
   }
 }
+
+// ─── Data to XML Conversion ────────────────────────────────
+
+export function dataToXml(data: Record<string, unknown>, xsdPath: string): string {
+  const schemaText = readFileSync(xsdPath, "utf-8");
+  const doc = xsdParser.parse(schemaText);
+  const rootEl = doc["xs:schema"]["xs:element"];
+  const root = Array.isArray(rootEl) ? rootEl[0] : rootEl;
+  const arrayElements = getArrayElements(xsdPath);
+
+  const lines: string[] = [];
+  lines.push(`<?xml version="1.0" encoding="UTF-8"?>`);
+  renderDataElement(root, data, arrayElements, lines, 0);
+  return lines.join("\n");
+}
+
+function renderDataElement(
+  xsdEl: Record<string, unknown>,
+  data: unknown,
+  arrayElements: string[],
+  lines: string[],
+  indent: number,
+): void {
+  const name = xsdEl["@_name"] as string;
+  const prefix = "  ".repeat(indent);
+  const complexType = xsdEl["xs:complexType"] as Record<string, unknown> | undefined;
+
+  // Simple type element — render scalar value
+  if (!complexType) {
+    const value = data ?? "";
+    lines.push(`${prefix}<${name}>${escapeXmlValue(String(value))}</${name}>`);
+    return;
+  }
+
+  // Complex element — data should be an object
+  const obj = (typeof data === "object" && data !== null ? data : {}) as Record<string, unknown>;
+
+  // Collect attributes
+  const attrs = collectAttributes(complexType);
+  const attrStr = attrs.length > 0
+    ? " " + attrs.map((a) => `${a}="${escapeXmlValue(String(obj[`@_${a}`] ?? ""))}"`).join(" ")
+    : "";
+
+  lines.push(`${prefix}<${name}${attrStr}>`);
+
+  // Render children from xs:sequence
+  const sequence = complexType["xs:sequence"] as Record<string, unknown> | undefined;
+  if (sequence) {
+    const children = sequence["xs:element"];
+    if (children) {
+      const childList = Array.isArray(children) ? children : [children];
+      for (const childXsd of childList) {
+        const child = childXsd as Record<string, unknown>;
+        const childName = child["@_name"] as string;
+        const childData = obj[childName];
+        const isArray = arrayElements.includes(childName);
+
+        if (isArray && Array.isArray(childData)) {
+          for (const item of childData) {
+            renderDataElement(child, item, arrayElements, lines, indent + 1);
+          }
+        } else if (childData !== undefined) {
+          renderDataElement(child, childData, arrayElements, lines, indent + 1);
+        } else if (child["@_minOccurs"] !== "0") {
+          // Required but missing: empty element
+          lines.push(`${prefix}  <${childName}></${childName}>`);
+        }
+        // Optional and missing: omit
+      }
+    }
+  }
+
+  lines.push(`${prefix}</${name}>`);
+}
+
+function escapeXmlValue(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
