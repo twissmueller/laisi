@@ -2,9 +2,10 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { scanIssue, scanAllIssues } from "../../src/lib/state.js";
 import { mkdirSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import type { WorkflowDefinition } from "../../src/lib/workflow.js";
 
-const TEST_DIR = join(import.meta.dirname, "../../.test-issues");
+const TEST_DIR = join(tmpdir(), "laisi-test-issues");
 const ISSUE_DIR = join(TEST_DIR, "42");
 
 const workflow: WorkflowDefinition = {

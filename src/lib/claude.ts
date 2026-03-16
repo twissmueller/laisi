@@ -58,8 +58,8 @@ export function extractXml(raw: string): string {
   }
 
   // Strip trailing text after closing root tag
-  // Extract root tag from the first line (e.g. <explore ...> → explore)
-  const rootMatch = xml.match(/<([a-zA-Z_][\w.-]*)/);
+  // Extract root tag, skipping XML processing instructions (<?xml ...?>)
+  const rootMatch = xml.match(/<([a-zA-Z_][\w.-]*)[^?]/);
   if (rootMatch) {
     const closingTag = `</${rootMatch[1]}>`;
     const closingIdx = xml.lastIndexOf(closingTag);

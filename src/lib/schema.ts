@@ -28,7 +28,6 @@ export function generateSkeleton(xsdPath: string): string {
   const doc = xsdParser.parse(schemaText);
   const rootEl = doc["xs:schema"]["xs:element"];
   const root = Array.isArray(rootEl) ? rootEl[0] : rootEl;
-  const rootName: string = root["@_name"];
 
   const lines: string[] = [];
   lines.push(`<?xml version="1.0" encoding="UTF-8"?>`);

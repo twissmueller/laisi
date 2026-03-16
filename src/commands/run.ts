@@ -121,8 +121,8 @@ export async function run(opts: RunOptions): Promise<void> {
     }
 
     // ── 7. Commit & Push ──
-    if (phase.tools?.length) {
-      gitAdd(repoRoot);
+    if (result.success && phase.tools?.length) {
+      gitAdd(repoRoot); // Only stage code changes on success
     }
     gitAdd(issueDir);
     gitCommit(`issue-${selected.issueNumber}: ${phase.id}`);
