@@ -4,3 +4,4 @@ dist/
 .issues/orchestrator.log
 *.raw
 .DS_Store
+.worktrees/
