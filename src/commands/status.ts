@@ -1,77 +1,76 @@
 /**
  * `laisi status` – Shows the state of all issues
  */
-import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { getRepoRoot } from "../lib/github.js";
 import { scanAllIssues } from "../lib/state.js";
-import { PHASE_ORDER } from "../types.js";
+import { loadConfig } from "../lib/config.js";
+import { loadWorkflow } from "../lib/workflow.js";
 
 export interface StatusOptions {
   laisiHome: string;
 }
 
-export function status(_opts: StatusOptions): void {
+export function status(opts: StatusOptions): void {
   const repoRoot = getRepoRoot();
   const issuesDir = join(repoRoot, ".issues");
-  const states = scanAllIssues(issuesDir);
+
+  const config = loadConfig(repoRoot);
+  if (!config.workflow) {
+    console.log("No workflow configured. Set 'workflow' in .laisi.yml");
+    return;
+  }
+  const workflow = loadWorkflow(opts.laisiHome, config.workflow);
+  const states = scanAllIssues(issuesDir, workflow);
 
   if (states.length === 0) {
     console.log("No issues tracked. Start with: laisi run");
     return;
   }
 
-  // Header
   console.log("");
   console.log(
     "Issue".padEnd(8) +
-    "Phase".padEnd(12) +
-    "Status".padEnd(18) +
-    "Next Step",
+    "Progress".padEnd(20) +
+    "Status".padEnd(14) +
+    "Next",
   );
   console.log("─".repeat(65));
 
-  // Sort: issues further along in the workflow first
-  states.sort((a, b) => {
-    const aOrd = a.latestPhase ? PHASE_ORDER[a.latestPhase] : 0;
-    const bOrd = b.latestPhase ? PHASE_ORDER[b.latestPhase] : 0;
-    return bOrd - aOrd;
-  });
+  states.sort((a, b) => b.completedPhases.length - a.completedPhases.length);
+
+  const totalPhases = workflow.phases.length;
 
   for (const state of states) {
     const nr = `#${state.issueNumber}`.padEnd(8);
-    const phase = (state.latestPhase ?? "—").padEnd(12);
+    const done = state.completedPhases.length;
+    const progress = `${done}/${totalPhases} phases`.padEnd(20);
 
     let statusText: string;
-    if (existsSync(join(issuesDir, String(state.issueNumber), "0-split.json"))) {
-      statusText = "🔀 split";
-    } else if (state.latestFile?.suffix === "pending.xml") {
+    if (state.pendingPhase) {
       statusText = "⏳ waiting";
-    } else if (state.latestFile?.suffix === "failed.xml") {
-      statusText = "❌ failed";
-    } else if (state.latestPhase === "release" && state.latestFile?.suffix === "xml") {
+    } else if (done === totalPhases) {
       statusText = "✅ done";
-    } else {
+    } else if (state.nextPhase) {
       statusText = "● active";
+    } else {
+      statusText = "⏸ blocked";
     }
-    statusText = statusText.padEnd(18);
+    statusText = statusText.padEnd(14);
 
-    const next = state.nextAction
-      ? `→ ${state.nextAction.phase} (${state.nextAction.reason})`
-      : "—";
+    const next = state.nextPhase
+      ? `→ ${state.nextPhase.id}`
+      : state.pendingPhase
+        ? `⏳ ${state.pendingPhase}`
+        : "—";
 
-    console.log(`${nr}${phase}${statusText}${next}`);
+    console.log(`${nr}${progress}${statusText}${next}`);
   }
 
   console.log("");
-
-  // Summary
-  const active = states.filter((s) => s.nextAction !== null).length;
-  const waiting = states.filter((s) => s.latestFile?.suffix === "pending.xml").length;
-  const done = states.filter(
-    (s) => s.latestPhase === "release" && s.latestFile?.suffix === "xml",
-  ).length;
-
-  console.log(`${states.length} issues: ${active} active, ${waiting} waiting, ${done} done`);
+  const active = states.filter((s) => s.nextPhase !== null).length;
+  const waiting = states.filter((s) => s.pendingPhase !== null).length;
+  const doneCount = states.filter((s) => s.completedPhases.length === totalPhases).length;
+  console.log(`${states.length} issues: ${active} active, ${waiting} waiting, ${doneCount} done`);
   console.log("");
 }
