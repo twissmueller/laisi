@@ -5,18 +5,13 @@
  * Retries on invalid output.
  */
 import { execSync } from "node:child_process";
-import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { readFileSync } from "node:fs";
 import { XMLParser, XMLValidator } from "fast-xml-parser";
 import { log } from "./logger.js";
-import { extractSchemaShape, type SchemaShape } from "./schema.js";
-import type { Phase } from "../types.js";
-
-const MAX_RETRIES = 2;
 
 // ─── Call Claude (--print mode: output only, no repo access) ──
 
-function callClaude(prompt: string, cwd?: string, allowedTools?: string[]): string {
+export function callClaude(prompt: string, cwd?: string, allowedTools?: string[]): string {
   const toolFlag = allowedTools?.length
     ? ` --allowedTools "${allowedTools.join(",")}"`
     : "";
@@ -48,7 +43,7 @@ export function callClaudePlain(prompt: string): string {
 
 // ─── Extract XML from Claude output ─────────────────────────
 
-function extractXml(raw: string): string {
+export function extractXml(raw: string): string {
   // Claude sometimes writes prose before/after the XML
   let xml: string;
 
@@ -78,7 +73,7 @@ function extractXml(raw: string): string {
 
 // ─── Validate XML (well-formed check) ───────────────────────
 
-function validateXml(xml: string): { valid: boolean; error?: string } {
+export function validateXml(xml: string): { valid: boolean; error?: string } {
   const result = XMLValidator.validate(xml);
   if (result === true) return { valid: true };
   return {
@@ -112,155 +107,6 @@ const parser = new XMLParser({
 
 export function parseXml<T>(xml: string): T {
   return parser.parse(xml) as T;
-}
-
-// ─── Structural validation against XSD shape ────────────────
-
-function validateStructure(
-  data: Record<string, unknown>,
-  shape: SchemaShape,
-): { valid: boolean; errors: string[] } {
-  const errors: string[] = [];
-
-  // Check root element
-  if (!(shape.rootElement in data)) {
-    const actualRoots = Object.keys(data).filter((k) => k !== "?xml");
-    errors.push(
-      `Wrong root element: expected <${shape.rootElement}>, found: <${actualRoots[0] ?? "??"}>`,
-    );
-    return { valid: false, errors };
-  }
-
-  // Check required children
-  const root = data[shape.rootElement] as Record<string, unknown>;
-  if (typeof root !== "object" || root === null) {
-    errors.push(`Root element <${shape.rootElement}> is empty or not an object`);
-    return { valid: false, errors };
-  }
-
-  for (const child of shape.requiredChildren) {
-    if (!(child in root)) {
-      errors.push(`Required element <${child}> missing in <${shape.rootElement}>`);
-    }
-  }
-
-  return { valid: errors.length === 0, errors };
-}
-
-// ─── Main function: Claude with schema validation ───────────
-
-export interface ClaudeResult<T> {
-  success: boolean;
-  data?: T;
-  rawXml?: string;
-  error?: string;
-}
-
-export async function claudeWithValidation<T>(
-  prompt: string,
-  outputPath: string,
-  phase?: Phase,
-  laisiHome?: string,
-  cwd?: string,
-  allowedTools?: string[],
-): Promise<ClaudeResult<T>> {
-  let currentPrompt = prompt;
-
-  // Load schema shape (if phase + laisiHome are provided)
-  let shape: SchemaShape | undefined;
-  if (phase && laisiHome) {
-    try {
-      shape = extractSchemaShape(join(laisiHome, "schemas", `${phase}.xsd`));
-    } catch (err) {
-      log(`  ⚠️ Schema for ${phase} not loadable, skipping structural validation`);
-    }
-  }
-
-  // Always inject schema into the prompt so Claude knows the structure from the start
-  if (shape) {
-    currentPrompt = `${currentPrompt}
-
-## XSD Schema (your output MUST conform to this schema)
-
-${shape.schemaText}`;
-  }
-
-  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
-    log(`  Claude call (attempt ${attempt}/${MAX_RETRIES})...`);
-
-    try {
-      const raw = callClaude(currentPrompt, cwd, allowedTools);
-      const xml = extractXml(raw);
-
-      // Well-formed?
-      const validation = validateXml(xml);
-      if (!validation.valid) {
-        log(`  ⚠️ Invalid XML: ${validation.error}`);
-
-        if (attempt < MAX_RETRIES) {
-          const rootHint = shape
-            ? ` The root element must be <${shape.rootElement}>.`
-            : "";
-          currentPrompt = `${prompt}
-
-YOUR PREVIOUS OUTPUT WAS INVALID XML:
-${validation.error}
-
-Please correct and output ONLY valid XML. No prose before or after.${rootHint}
-Start with <?xml version="1.0" encoding="UTF-8"?>`;
-          continue;
-        }
-
-        writeFileSync(`${outputPath}.raw`, raw);
-        return { success: false, error: validation.error };
-      }
-
-      // Parsen
-      const data = parseXml<T>(xml);
-
-      // Structural validation (root element + required children)
-      if (shape) {
-        const structural = validateStructure(data as Record<string, unknown>, shape);
-        if (!structural.valid) {
-          const errorList = structural.errors.join("\n- ");
-          log(`  ⚠️ Structural errors:\n- ${errorList}`);
-
-          if (attempt < MAX_RETRIES) {
-            currentPrompt = `${prompt}
-
-YOUR PREVIOUS OUTPUT HAD THE WRONG XML STRUCTURE:
-- ${errorList}
-
-Here is the complete XSD schema that your output MUST conform to:
-
-${shape.schemaText}
-
-Output ONLY valid XML that exactly conforms to this schema.
-Start with <?xml version="1.0" encoding="UTF-8"?>`;
-            continue;
-          }
-
-          writeFileSync(`${outputPath}.raw`, raw);
-          return { success: false, error: `Structural error: ${structural.errors.join("; ")}` };
-        }
-      }
-
-      // XML speichern
-      writeFileSync(outputPath, xml);
-      log(`  ✅ XML written: ${outputPath}`);
-
-      return { success: true, data, rawXml: xml };
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      log(`  ❌ Error: ${message}`);
-
-      if (attempt === MAX_RETRIES) {
-        return { success: false, error: message };
-      }
-    }
-  }
-
-  return { success: false, error: "Max retries reached" };
 }
 
 // ─── Load prompt template and substitute variables ──────────

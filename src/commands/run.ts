@@ -26,12 +26,12 @@ import { loadConfig } from "../lib/config.js";
 import type { Action } from "../types.js";
 
 // ── Phase Handlers ──
-import { runExplore } from "../phases/explore.js";
-import { runPlan } from "../phases/plan.js";
-import { runDo } from "../phases/do.js";
-import { runCheck } from "../phases/check.js";
-import { runAct } from "../phases/act.js";
-import { runRelease } from "../phases/release.js";
+// import { runExplore } from "../phases/explore.js";
+// import { runPlan } from "../phases/plan.js";
+// import { runDo } from "../phases/do.js";
+// import { runCheck } from "../phases/check.js";
+// import { runAct } from "../phases/act.js";
+// import { runRelease } from "../phases/release.js";
 
 export interface RunOptions {
   dryRun: boolean;
@@ -121,14 +121,15 @@ export async function run(opts: RunOptions): Promise<void> {
     const config = loadConfig(repoRoot);
     const phaseCtx = { laisiHome: opts.laisiHome, config };
 
-    switch (best.phase) {
-      case "explore": await runExplore(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
-      case "plan":    await runPlan(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
-      case "do":      await runDo(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
-      case "check":   await runCheck(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
-      case "act":     await runAct(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
-      case "release": await runRelease(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
-    }
+    // TODO: replaced by runPhase() in Task 5/9
+    // switch (best.phase) {
+    //   case "explore": await runExplore(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
+    //   case "plan":    await runPlan(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
+    //   case "do":      await runDo(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
+    //   case "check":   await runCheck(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
+    //   case "act":     await runAct(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
+    //   case "release": await runRelease(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
+    // }
 
     // ── 6. Commit & Push ──
     if (best.phase === "do") {
