@@ -84,29 +84,14 @@ export function validateXml(xml: string): { valid: boolean; error?: string } {
 
 // ─── Parse XML ──────────────────────────────────────────────
 
-const parser = new XMLParser({
-  ignoreAttributes: false,
-  parseTagValue: true,
-  trimValues: true,
-  isArray: (name) => {
-    // These elements are always arrays, even with only one child
-    return [
-      "requirement",
-      "criterion",
-      "gate",
-      "term",
-      "question",
-      "split",
-      "file",
-      "dependency",
-      "test",
-      "step",
-    ].includes(name);
-  },
-});
-
-export function parseXml<T>(xml: string): T {
-  return parser.parse(xml) as T;
+export function parseXml<T>(xml: string, arrayElements?: string[]): T {
+  const p = new XMLParser({
+    ignoreAttributes: false,
+    parseTagValue: true,
+    trimValues: true,
+    isArray: (name) => arrayElements?.includes(name) ?? false,
+  });
+  return p.parse(xml) as T;
 }
 
 // ─── Load prompt template and substitute variables ──────────
