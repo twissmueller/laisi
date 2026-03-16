@@ -53,18 +53,39 @@ export function loadWorkflow(
 
   const doc = parse(raw) as WorkflowDefinition;
 
-  if (!doc.workflow || !doc.phases || !Array.isArray(doc.phases)) {
+  if (!doc.workflow || !doc.description || !doc.phases || !Array.isArray(doc.phases)) {
     throw new Error(
-      `Invalid workflow file: ${filePath} — missing "workflow" or "phases" field`,
+      `Invalid workflow file: ${filePath} — missing "workflow", "description", or "phases" field`,
     );
   }
 
   for (const phase of doc.phases) {
-    if (!phase.id || !phase.input || !phase.output || !phase.schema || !phase.prompt) {
+    if (!phase.id || !phase.description || !phase.input || !phase.output || !phase.schema || !phase.prompt) {
       throw new Error(
         `Invalid phase in ${filePath}: missing required field in phase "${phase.id ?? "unknown"}"`,
       );
     }
+
+    // Validate human_gate type if present
+    if (phase.human_gate !== undefined) {
+      const validTypes =
+        typeof phase.human_gate === "string" &&
+        (phase.human_gate === "always" || phase.human_gate === "on_failure");
+      const validObject =
+        typeof phase.human_gate === "object" &&
+        phase.human_gate !== null &&
+        "on_field" in phase.human_gate &&
+        "value" in phase.human_gate &&
+        typeof phase.human_gate.on_field === "string" &&
+        typeof phase.human_gate.value === "string";
+
+      if (!validTypes && !validObject) {
+        throw new Error(
+          `Invalid human_gate in phase "${phase.id}" in ${filePath}: must be "always", "on_failure", or an object with on_field and value string properties`,
+        );
+      }
+    }
+
     phase.max_retries = phase.max_retries ?? 3;
   }
 
