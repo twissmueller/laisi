@@ -1,15 +1,7 @@
 /**
  * `laisi run` – One trigger. One step. Exit.
- *
- * 1. git pull
- * 2. Discover new issues
- * 3. Scan all issues, determine actions
- * 4. Select best action (highest priority)
- * 5. Execute phase
- * 6. git commit + push
- * 7. Exit
  */
-import { existsSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, writeFileSync, unlinkSync, renameSync } from "node:fs";
 import { join } from "node:path";
 import { log, initLogger } from "../lib/logger.js";
 import {
@@ -23,15 +15,9 @@ import {
 } from "../lib/github.js";
 import { scanAllIssues, ensureIssueDir } from "../lib/state.js";
 import { loadConfig } from "../lib/config.js";
-import type { Action } from "../types.js";
-
-// ── Phase Handlers ──
-// import { runExplore } from "../phases/explore.js";
-// import { runPlan } from "../phases/plan.js";
-// import { runDo } from "../phases/do.js";
-// import { runCheck } from "../phases/check.js";
-// import { runAct } from "../phases/act.js";
-// import { runRelease } from "../phases/release.js";
+import { loadWorkflow } from "../lib/workflow.js";
+import { runPhase, evaluateHumanGate } from "../lib/run-phase.js";
+import { extractSchemaShape } from "../lib/schema.js";
 
 export interface RunOptions {
   dryRun: boolean;
@@ -46,6 +32,15 @@ export async function run(opts: RunOptions): Promise<void> {
 
   initLogger(join(issuesDir, "orchestrator.log"));
   log("═══ LAISI Heartbeat ═══");
+
+  // ── Load workflow ──
+  const config = loadConfig(repoRoot);
+  if (!config.workflow) {
+    log("❌ No workflow configured. Set 'workflow' in .laisi.yml");
+    return;
+  }
+  const workflow = loadWorkflow(opts.laisiHome, config.workflow);
+  log(`  Workflow: ${workflow.workflow}`);
 
   // ── Lock ──
   if (existsSync(lockPath)) {
@@ -77,69 +72,63 @@ export async function run(opts: RunOptions): Promise<void> {
     }
 
     // ── 3. Scan all issues ──
-    const states = scanAllIssues(issuesDir);
-    const actions: Action[] = states
-      .map((s) => s.nextAction)
-      .filter((a): a is Action => a !== null);
+    const states = scanAllIssues(issuesDir, workflow);
+    const actionable = states.filter((s) => s.nextPhase !== null);
 
-    if (actions.length === 0) {
+    if (actionable.length === 0) {
       if (states.length === 0 && assignedIssues.length === 0) {
         log("😴 Nothing to do. No issues found.");
-        log("   → Create a GitHub issue and assign it to yourself (`gh issue create --assignee @me`).");
       } else {
-        log("😴 Nothing to do. All issues are waiting for external input.");
+        log("😴 Nothing to do. All issues are waiting or complete.");
       }
       return;
     }
 
-    // ── 4. Select best action ──
-    let best: Action;
+    // ── 4. Select issue ──
+    let selected = actionable[0];
     if (opts.issueNumber) {
-      const match = actions.find((a) => a.issueNumber === opts.issueNumber);
+      const match = actionable.find((s) => s.issueNumber === opts.issueNumber);
       if (!match) {
         log(`❌ No action found for issue #${opts.issueNumber}.`);
         return;
       }
-      best = match;
-    } else {
-      actions.sort((a, b) => a.priority - b.priority || a.issueNumber - b.issueNumber);
-      best = actions[0];
+      selected = match;
     }
 
-    log(`🚀 #${best.issueNumber} → ${best.phase} (${best.reason})`);
+    const phase = selected.nextPhase!;
+    log(`🚀 #${selected.issueNumber} → ${phase.id} (${phase.description})`);
 
     if (opts.dryRun) {
       log("🏜️  Dry-run mode. Pending actions:");
-      for (const a of actions) {
-        log(`   - #${a.issueNumber} → ${a.phase} (${a.reason})`);
+      for (const s of actionable) {
+        log(`   - #${s.issueNumber} → ${s.nextPhase!.id}`);
       }
       return;
     }
 
     // ── 5. Execute phase ──
-    const issueDir = join(issuesDir, String(best.issueNumber));
-    const config = loadConfig(repoRoot);
-    const phaseCtx = { laisiHome: opts.laisiHome, config };
+    const issueDir = join(issuesDir, String(selected.issueNumber));
+    const result = await runPhase(phase, issueDir, opts.laisiHome, repoRoot);
 
-    // TODO: replaced by runPhase() in Task 5/9
-    // switch (best.phase) {
-    //   case "explore": await runExplore(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
-    //   case "plan":    await runPlan(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
-    //   case "do":      await runDo(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
-    //   case "check":   await runCheck(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
-    //   case "act":     await runAct(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
-    //   case "release": await runRelease(best.issueNumber, issueDir, repoRoot, phaseCtx); break;
-    // }
+    // ── 6. Handle human gate ──
+    if (result.success && result.data && phase.human_gate) {
+      const shape = extractSchemaShape(join(opts.laisiHome, phase.schema));
+      if (evaluateHumanGate(phase.human_gate, result.data, shape.rootElement)) {
+        const pendingPath = `${result.outputPath}.pending`;
+        renameSync(result.outputPath!, pendingPath);
+        log(`  ⏸ Human gate triggered → ${pendingPath}`);
+      }
+    }
 
-    // ── 6. Commit & Push ──
-    if (best.phase === "do") {
-      gitAdd(repoRoot); // Stage code changes made by Claude
+    // ── 7. Commit & Push ──
+    if (phase.tools?.length) {
+      gitAdd(repoRoot);
     }
     gitAdd(issueDir);
-    gitCommit(`issue-${best.issueNumber}: ${best.phase}`);
+    gitCommit(`issue-${selected.issueNumber}: ${phase.id}`);
     gitPush();
 
-    log(`✅ #${best.issueNumber} ${best.phase} done. Exit.`);
+    log(`✅ #${selected.issueNumber} ${phase.id} done. Exit.`);
   } finally {
     releaseLock();
   }
