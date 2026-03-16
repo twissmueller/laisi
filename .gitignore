@@ -3,3 +3,4 @@ dist/
 .issues/.lock
 .issues/orchestrator.log
 *.raw
+.DS_Store
