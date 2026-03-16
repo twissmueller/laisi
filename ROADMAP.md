@@ -3,115 +3,77 @@
 ## Phase 1: Foundation (current state)
 
 ### Done
-- [x] Architecture defined (orchestrator + phases + state convention)
-- [x] TypeScript project set up (tsx, fast-xml-parser)
-- [x] `src/lib/claude.ts` – Claude wrapper with XML validation + retry
-- [x] `src/lib/state.ts` – Filesystem state reading + action determination
-- [x] `src/lib/github.ts` – Git + GitHub CLI wrapper
-- [x] `src/orchestrator.ts` – Single-shot, priority-based dispatch
-- [x] `src/types.ts` – Central type definitions
-- [x] Explore phase complete: schema + prompt + phase handler
-- [x] Example issue #42 with pending.xml as reference
+- [x] Workflow-driven architecture: phases defined in YAML, not TypeScript
+- [x] Generic `runPhase()` core loop: skeleton generation → Claude → validate → retry
+- [x] XSD skeleton generation from schemas (full recursive traversal)
+- [x] Workflow-driven state machine (no hardcoded phase names)
+- [x] CLI: `laisi run`, `laisi status`, `laisi init --workflow <name>`
+- [x] GitHub integration: issue discovery, git commit/push
+- [x] Human gate system: `always`, `on_field`, `on_failure`
+- [x] `.gate` files for retry exhaustion
+- [x] Unit tests (24 tests, vitest)
+- [x] Example workflow: `github-issue-intake`
 
-### Open: Flesh out schemas + prompts
-
-#### Plan Phase (`schemas/plan.xsd` + `prompts/plan.txt` + `src/phases/plan.ts`)
-- [ ] Define schema: which files will be changed, what exactly
-      changes in each file, expected result, test plan
-- [ ] Prompt: Claude receives explore.xml, must create an implementation
-      plan achievable in ONE do session
-- [ ] Implement phase handler
-- [ ] Add types to types.ts (PlanResult)
-- [ ] Decide: Does plan need a human gate? (Plan review before do?)
-
-#### Do Phase (`schemas/do.xsd` + `prompts/do.txt` + `src/phases/do.ts`)
-- [ ] Define schema: changed files, diffs/summary,
-      whether tests were written, commit message
-- [ ] Prompt: Claude receives plan.xml and implements. IMPORTANT:
-      This is the only phase that uses `claude` instead of `claude --print`
-      (`callClaudeInteractive` in claude.ts)
-- [ ] Implement phase handler
-- [ ] Add types to types.ts (DoResult)
-- [ ] Decide: How do we give Claude access to code context
-      without overloading the prompt?
-
-#### Check Phase (`schemas/check.xsd` + `prompts/check.txt` + `src/phases/check.ts`)
-- [ ] Define schema: lint results, test results, security scan,
-      AI code review findings, overall status (passed/failed)
-- [ ] Prompt: Claude reviews code against the requirements
-- [ ] Phase handler: first deterministic checks (lint, test, build),
-      then Claude for AI review. Both go into the XML.
-- [ ] Decide: Which tools? → Must be project-configurable
-
-#### Act Phase (`schemas/act.xsd` + `prompts/act.txt` + `src/phases/act.ts`)
-- [ ] Define schema: PR URL, PR body, learnings, rule updates
-- [ ] Prompt: Claude summarizes, creates PR body, identifies learnings
-- [ ] Phase handler: `gh pr create`, post issue comment
-- [ ] Decide: Should act also update CLAUDE.md or project rules?
-
-#### Release Phase (`schemas/release.xsd` + `prompts/release.txt` + `src/phases/release.ts`)
-- [ ] Define schema: tag, version, changelog entry, deploy status
-- [ ] Prompt: Claude generates changelog entry from all phase XMLs
-- [ ] Phase handler: `git tag`, update changelog, optionally trigger deploy
-- [ ] Decide: Semantic versioning automatic? Or from issue labels?
+### Open: Create first complete workflow
+- [ ] Define `schemas/intent.xsd` — IntentSpec schema for the intent phase
+- [ ] Write `prompts/01-intent.md` — prompt template for intent extraction
+- [ ] Define `schemas/scope.xsd` — scope schema
+- [ ] Write `prompts/02-scope.md` — prompt template for scope mapping
+- [ ] End-to-end test: run a real GitHub issue through intent → scope
 
 ---
 
 ## Phase 2: Hardening
 
 ### Orchestrator
-- [ ] Timeout for Claude sessions (what if Claude hangs?)
-- [ ] `npm run status` – overview of all issues and their state
-- [ ] Multiple issues in parallel? Or deliberately stay serial?
+- [ ] Priority logic for multi-issue selection (currently: first actionable)
+- [ ] Timeout handling for Claude sessions
+- [ ] `.pending` file resolution: detect new comments and resume
 
 ### Validation
-- [ ] XSD schema validation in addition to well-formed check
-      (currently only XML well-formedness via fast-xml-parser)
-- [ ] Fallback: save raw output for debugging (already prepared)
-
-### Git Integration
-- [ ] Branch strategy: one branch per issue (`issue-{nr}`)
-- [ ] Merge conflicts when multiple issues run in parallel?
+- [ ] Deeper XSD validation (enum values, cardinality, data types)
+- [ ] Save raw Claude output alongside `.gate` files for debugging
 
 ### Testing
-- [ ] Unit tests for state.ts (parseIssueFile, determineAction)
-- [ ] Integration test: run mock issue through all phases
+- [ ] Integration test: mock Claude, run full `runPhase()` cycle
+- [ ] Test `extractXml` edge cases (malformed output, missing tags)
+- [ ] Test orchestrator flow (`run.ts`) with mock GitHub/Claude
 
 ---
 
 ## Phase 3: Extensions
 
+### More Workflows
+- [ ] Implementation workflow (intent → scope → implement → verify → PR)
+- [ ] Bug-fix workflow (triage → reproduce → fix → verify)
+- [ ] Documentation workflow (analyze → draft → review)
+
+### Tool-Using Phases
+- [ ] Validate implementation phase: Claude with `Edit/Write/Read/Bash` tools
+- [ ] Git staging for tool-using phases (only on success)
+
 ### Observability
-- [ ] `npm run status` → table of all issues + phase + status
-- [ ] Metrics: average throughput time per phase
-- [ ] Alerts: notification when issue has been pending for X hours
+- [ ] `laisi status` with workflow progress bars
+- [ ] Metrics: average time per phase
+- [ ] Alerts: notification when issue is gated for > X hours
 
 ### Configuration
-- [ ] `.laisi.yml` in repo root for project-specific settings
-      (test commands, lint commands, branch prefix, etc.)
-- [ ] Per-issue overrides via GitHub labels?
-
-### Self-improvement (Meta)
-- [ ] Act phase writes learnings to a knowledge base
-- [ ] Explore phase reads previous learnings as context
-- [ ] Prompt templates are improved from experience
+- [ ] Prompt variable substitution (pass config preferences to prompts)
+- [ ] Per-project workflow overrides (extend a base workflow)
 
 ---
 
 ## Open Decisions
 
-1. **Plan Human Gate**: Should the human approve the plan before
-   do starts? Pro: safety. Con: slowdown.
+1. **Prompt Variables**: Should `loadPrompt()` substitute workflow-level variables
+   (e.g., `${TECH_STACK}` from `.laisi.yml`) or keep prompts self-contained?
 
-2. **Do Phase Code Context**: How does Claude get the relevant code
-   without context overflow? Options:
-   - Plan explicitly lists which files Claude should read
-   - Claude gets full repo access via `callClaudeInteractive`
+2. **Workflow Composition**: Should workflows support includes/extends
+   (e.g., a base workflow with optional phases)?
 
-3. **Check Phase Tools**: Hardcoded or configurable?
-   First approach: use `package.json` scripts if available.
+3. **Parallelism**: May the orchestrator work on multiple issues simultaneously?
+   Currently: one step per trigger (serial by design).
 
-4. **Versioning**: Semantic versioning automatic or manual?
-
-5. **Parallelism**: May the orchestrator work on multiple issues
-   simultaneously? Currently: no (one step per trigger).
+4. **Pending Resolution**: How should the orchestrator detect that a human
+   has reviewed a `.pending` phase? Options: new GitHub comment, manual
+   file rename, CLI command (`laisi approve <issue> <phase>`).
