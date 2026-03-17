@@ -1,0 +1,91 @@
+workflow: full-lifecycle
+description: >
+  End-to-end issue lifecycle: selection, clarification, planning,
+  implementation, documentation, deployment, testing, and stakeholder signoff.
+
+phases:
+  - id: select
+    description: Rank GitHub issues and present top candidates
+    type: script
+    schema: schemas/select.xsd
+    script: scripts/select-issue.sh
+    output_format: json
+    max_retries: 3
+    human_gate: true
+
+  - id: explore
+    description: Extract requirements, quality gates, clarify via GH comments
+    type: llm
+    schema: schemas/explore.xsd
+    prompt: prompts/explore.txt
+    max_retries: 3
+    max_clarify_rounds: 5
+
+  - id: plan
+    description: Map requirements to files, test plan, execution order
+    type: llm-agent
+    schema: schemas/plan.xsd
+    prompt: prompts/plan.txt
+    max_retries: 3
+    human_gate: false
+
+  - id: implement
+    description: Write code and tests following the plan
+    type: llm-agent
+    schema: schemas/implement.xsd
+    prompt: prompts/implement.txt
+    max_retries: 3
+    human_gate: false
+
+  - id: document
+    description: Update project architecture and domain docs
+    type: llm-agent
+    schema: schemas/document.xsd
+    prompt: prompts/document.txt
+    max_retries: 3
+    human_gate: false
+
+  - id: local-deploy
+    description: Build and deploy to local Docker environment
+    type: script
+    schema: schemas/deploy.xsd
+    script: scripts/local-deploy.sh
+    output_format: json
+    max_retries: 3
+    human_gate: false
+
+  - id: local-test
+    description: Run automated tests against local deployment
+    type: script
+    schema: schemas/test-results.xsd
+    script: scripts/local-test.sh
+    output_format: json
+    max_retries: 3
+    human_gate: false
+
+  - id: prod-deploy
+    description: Deploy frontend to Vercel, backend to Fly.io
+    type: script
+    schema: schemas/deploy.xsd
+    script: scripts/prod-deploy.sh
+    output_format: json
+    max_retries: 3
+    human_gate: false
+
+  - id: prod-test
+    description: Run smoke tests against production
+    type: script
+    schema: schemas/test-results.xsd
+    script: scripts/prod-test.sh
+    output_format: json
+    max_retries: 3
+    human_gate: false
+
+  - id: signoff
+    description: Post deployment summary and test steps, reassign to stakeholder
+    type: script
+    schema: schemas/signoff.xsd
+    script: scripts/signoff.sh
+    output_format: json
+    max_retries: 3
+    human_gate: false

@@ -26,6 +26,33 @@ describe("loadWorkflow", () => {
     expect(() => loadWorkflow(LAISI_HOME, "nonexistent")).toThrow();
   });
 
+  it("loads the full-lifecycle workflow with linear derivation", () => {
+    const wf = loadWorkflow(LAISI_HOME, "full-lifecycle");
+
+    expect(wf.workflow).toBe("full-lifecycle");
+    expect(wf.phases.length).toBe(10);
+
+    // Verify linear derivation
+    expect(wf.phases[0].input).toBe("0-issue.json");
+    expect(wf.phases[0].output).toBe("1-select.xml");
+    expect(wf.phases[1].input).toBe("1-select.xml");
+    expect(wf.phases[1].output).toBe("2-explore.xml");
+    expect(wf.phases[9].output).toBe("10-signoff.xml");
+
+    // Verify types
+    expect(wf.phases[0].type).toBe("script");
+    expect(wf.phases[1].type).toBe("llm");
+    expect(wf.phases[2].type).toBe("llm-agent");
+    expect(wf.phases[3].type).toBe("llm-agent");
+
+    // Verify gates
+    expect(wf.phases[0].human_gate).toBe(true);
+    expect(wf.phases[2].human_gate).toBe(false);
+
+    // Verify clarify rounds
+    expect(wf.phases[1].max_clarify_rounds).toBe(5);
+  });
+
   it("parses human_gate field variants", () => {
     const wf = loadWorkflow(LAISI_HOME, "github-issue-intake");
     const gates = wf.phases.map((p) => p.human_gate).filter(Boolean);
