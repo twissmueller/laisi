@@ -1,0 +1,30 @@
+workflow: integration-test
+description: Integration Test Workflow
+phases:
+  - id: analyze
+    description: Analyze an issue and extract key information
+    type: llm
+    input: 0-input.json
+    output: 1-analyze.xml
+    schema: schemas/analyze.xsd
+    prompt: prompts/analyze.md
+    max_retries: 2
+
+  - id: improve
+    description: Propose improvements based on analysis
+    type: llm-agent
+    input: 1-analyze.xml
+    output: 2-improve.xml
+    schema: schemas/improve.xsd
+    prompt: prompts/improve.md
+    max_retries: 2
+
+  - id: validate
+    description: Run validation checks via script
+    type: script
+    input: 2-improve.xml
+    output: 3-validate.xml
+    schema: schemas/validate.xsd
+    script: scripts/validate.sh
+    output_format: json
+    max_retries: 1
