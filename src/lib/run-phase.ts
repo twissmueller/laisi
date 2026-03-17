@@ -139,6 +139,7 @@ export async function runPhase(
   issueDir: string,
   laisiHome: string,
   repoRoot: string,
+  promptVars?: Record<string, string>,
 ): Promise<PhaseResult> {
   const maxAttempts = phase.max_retries;
   const schemaPath = join(laisiHome, phase.schema);
@@ -227,7 +228,7 @@ export async function runPhase(
     log(`  Skeleton generated for <${shape.rootElement}>`);
 
     const promptPath = join(laisiHome, phase.prompt!);
-    const systemPrompt = loadPrompt(promptPath, {});
+    const systemPrompt = loadPrompt(promptPath, promptVars ?? {});
     const isAgent = phase.type === "llm-agent";
     const tools = isAgent ? LLM_AGENT_TOOLS : phase.tools;
     const cwd = isAgent ? (phase.cwd ?? repoRoot) : (phase.cwd === "repo_root" ? repoRoot : undefined);
