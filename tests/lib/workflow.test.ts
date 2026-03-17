@@ -157,6 +157,43 @@ phases:
     expect(wf.phases[1].human_gate).toBe(false);
   });
 
+  it("accepts llm-agent phase type", () => {
+    writeFileSync(join(tmpDir, "workflows", "agent-type.yml"), `
+workflow: agent-type
+description: test
+phases:
+  - id: implement
+    description: Implement the plan
+    input: 3-plan.xml
+    output: 4-implement.xml
+    schema: schemas/do.xsd
+    prompt: prompts/do.txt
+    type: llm-agent
+    max_retries: 3
+`);
+    const wf = loadWorkflow(tmpDir, "agent-type");
+    expect(wf.phases[0].type).toBe("llm-agent");
+    expect(wf.phases[0].prompt).toBe("prompts/do.txt");
+  });
+
+  it("rejects llm-agent phase with script field", () => {
+    writeFileSync(join(tmpDir, "workflows", "bad-agent.yml"), `
+workflow: bad-agent
+description: test
+phases:
+  - id: implement
+    description: Implement
+    input: 3-plan.xml
+    output: 4-implement.xml
+    schema: schemas/do.xsd
+    prompt: prompts/do.txt
+    type: llm-agent
+    script: scripts/do.sh
+    max_retries: 3
+`);
+    expect(() => loadWorkflow(tmpDir, "bad-agent")).toThrow(/should not have "script"/);
+  });
+
   it("rejects non-boolean human_gate values", () => {
     writeFileSync(join(tmpDir, "workflows", "bad-gate.yml"), `
 workflow: bad-gate

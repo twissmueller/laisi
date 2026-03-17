@@ -14,6 +14,10 @@ import { generateSkeleton, extractSchemaShape, getArrayElements, dataToXml } fro
 import { callClaude, extractXml, validateXml, parseXml, loadPrompt } from "./claude.js";
 import type { PhaseDefinition, HumanGateConfig } from "./workflow.js";
 
+// ─── Constants ──────────────────────────────────────────────
+
+const LLM_AGENT_TOOLS = ["Edit", "Write", "Read", "Bash", "Glob", "Grep"];
+
 // ─── Types ─────────────────────────────────────────────────
 
 export interface PhaseResult {
@@ -224,7 +228,9 @@ export async function runPhase(
 
     const promptPath = join(laisiHome, phase.prompt!);
     const systemPrompt = loadPrompt(promptPath, {});
-    const cwd = phase.cwd === "repo_root" ? repoRoot : undefined;
+    const isAgent = phase.type === "llm-agent";
+    const tools = isAgent ? LLM_AGENT_TOOLS : phase.tools;
+    const cwd = isAgent ? (phase.cwd ?? repoRoot) : (phase.cwd === "repo_root" ? repoRoot : undefined);
 
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
       log(`  Claude call (attempt ${attempt + 1}/${maxAttempts})...`);
@@ -237,7 +243,7 @@ export async function runPhase(
           );
 
       try {
-        const raw = callClaude(prompt, cwd, phase.tools);
+        const raw = callClaude(prompt, cwd, tools);
 
         let xml: string;
         try {

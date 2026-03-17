@@ -25,7 +25,7 @@ export interface PhaseDefinition {
   tools?: string[];
   cwd?: string;
   // Script-specific:
-  type?: "llm" | "script";
+  type?: "llm" | "llm-agent" | "script";
   script?: string;
   output_format?: "xml" | "json" | "yaml";
 }
@@ -70,6 +70,7 @@ export function loadWorkflow(
 
     // Type-specific validation
     const isScript = phase.type === "script";
+    const isLlm = !phase.type || phase.type === "llm" || phase.type === "llm-agent";
     if (isScript) {
       if (!phase.script) {
         throw new Error(`Script phase "${phase.id}" missing required "script" field`);
@@ -77,7 +78,7 @@ export function loadWorkflow(
       if (phase.prompt) {
         throw new Error(`Script phase "${phase.id}" should not have "prompt" field`);
       }
-    } else {
+    } else if (isLlm) {
       if (!phase.prompt) {
         throw new Error(`LLM phase "${phase.id}" missing required "prompt" field`);
       }
@@ -87,6 +88,8 @@ export function loadWorkflow(
       if (phase.script) {
         throw new Error(`LLM phase "${phase.id}" should not have "script" field`);
       }
+    } else {
+      throw new Error(`Unknown phase type "${phase.type}" in phase "${phase.id}"`);
     }
 
     // Validate human_gate type if present
