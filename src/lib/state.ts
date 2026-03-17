@@ -15,6 +15,7 @@ export interface IssueState {
   workflowId: string;
   completedPhases: string[];
   pendingPhase: string | null;
+  clarifyPhase: string | null;
   nextPhase: PhaseDefinition | null;
 }
 
@@ -27,6 +28,7 @@ export function scanIssue(
   const nr = parseInt(basename(issueDir), 10);
   const completedPhases: string[] = [];
   let pendingPhase: string | null = null;
+  let clarifyPhase: string | null = null;
   let nextPhase: PhaseDefinition | null = null;
 
   const files = existsSync(issueDir) ? new Set(readdirSync(issueDir)) : new Set<string>();
@@ -35,6 +37,13 @@ export function scanIssue(
     // Check for pending/gate states
     if (files.has(`${phase.output}.pending`) || files.has(`${phase.output}.gate`)) {
       pendingPhase = phase.id;
+      break;
+    }
+
+    // Check for .clarify state
+    if (files.has(`${phase.output}.clarify`)) {
+      clarifyPhase = phase.id;
+      nextPhase = phase;
       break;
     }
 
@@ -59,6 +68,7 @@ export function scanIssue(
     workflowId: workflow.workflow,
     completedPhases,
     pendingPhase,
+    clarifyPhase,
     nextPhase,
   };
 }

@@ -89,6 +89,26 @@ describe("scanIssue", () => {
     expect(state.nextPhase).toBeNull();
   });
 
+  it("returns clarifyPhase AND nextPhase when .clarify file exists", () => {
+    writeFileSync(join(ISSUE_DIR, "0-issue.json"), "{}");
+    writeFileSync(join(ISSUE_DIR, "1-intent.xml.clarify"), "<intent/>");
+    const state = scanIssue(ISSUE_DIR, workflow);
+
+    expect(state.clarifyPhase).toBe("intent");
+    expect(state.nextPhase?.id).toBe("intent");
+    expect(state.pendingPhase).toBeNull();
+  });
+
+  it("prioritizes .gate over .clarify", () => {
+    writeFileSync(join(ISSUE_DIR, "0-issue.json"), "{}");
+    writeFileSync(join(ISSUE_DIR, "1-intent.xml.gate"), "<gate/>");
+    writeFileSync(join(ISSUE_DIR, "1-intent.xml.clarify"), "<intent/>");
+    const state = scanIssue(ISSUE_DIR, workflow);
+
+    expect(state.pendingPhase).toBe("intent");
+    expect(state.clarifyPhase).toBeNull();
+  });
+
   it("returns null nextPhase when input for first phase is missing", () => {
     const state = scanIssue(ISSUE_DIR, workflow);
 
