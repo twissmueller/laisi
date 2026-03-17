@@ -61,6 +61,17 @@ export function loadWorkflow(
     );
   }
 
+  // Derive input/output for phases that omit them (linear convention)
+  for (let i = 0; i < doc.phases.length; i++) {
+    const phase = doc.phases[i];
+    if (!phase.input) {
+      phase.input = i === 0 ? "0-issue.json" : doc.phases[i - 1].output;
+    }
+    if (!phase.output) {
+      phase.output = `${i + 1}-${phase.id}.xml`;
+    }
+  }
+
   for (const phase of doc.phases) {
     if (!phase.id || !phase.description || !phase.input || !phase.output || !phase.schema) {
       throw new Error(

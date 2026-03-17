@@ -42,6 +42,56 @@ describe("loadWorkflow", () => {
   });
 });
 
+describe("loadWorkflow linear derivation", () => {
+  const tmpDir = join(import.meta.dirname, "../../.test-workflows-linear");
+
+  beforeEach(() => {
+    mkdirSync(join(tmpDir, "workflows"), { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("derives input/output from phase order when omitted", () => {
+    writeFileSync(join(tmpDir, "workflows", "linear.yml"), `
+workflow: linear
+description: test
+phases:
+  - id: select
+    description: Pick issue
+    schema: schemas/select.xsd
+    type: script
+    script: scripts/select.sh
+    max_retries: 3
+  - id: explore
+    description: Explore requirements
+    schema: schemas/explore.xsd
+    prompt: prompts/explore.txt
+    max_retries: 3
+  - id: plan
+    description: Plan implementation
+    schema: schemas/plan.xsd
+    prompt: prompts/plan.txt
+    type: llm-agent
+    max_retries: 3
+`);
+    const wf = loadWorkflow(tmpDir, "linear");
+    expect(wf.phases[0].input).toBe("0-issue.json");
+    expect(wf.phases[0].output).toBe("1-select.xml");
+    expect(wf.phases[1].input).toBe("1-select.xml");
+    expect(wf.phases[1].output).toBe("2-explore.xml");
+    expect(wf.phases[2].input).toBe("2-explore.xml");
+    expect(wf.phases[2].output).toBe("3-plan.xml");
+  });
+
+  it("uses explicit input/output when provided (backward compat)", () => {
+    const wf = loadWorkflow(LAISI_HOME, "github-issue-intake");
+    expect(wf.phases[0].input).toBe("0-issue.json");
+    expect(wf.phases[0].output).toBe("1-intent.xml");
+  });
+});
+
 describe("loadWorkflow script phases", () => {
   const tmpDir = join(import.meta.dirname, "../../.test-workflows");
 
