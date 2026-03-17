@@ -29,7 +29,7 @@ const workflow: WorkflowDefinition = {
       schema: "schemas/scope.xsd",
       prompt: "prompts/02-scope.md",
       max_retries: 3,
-      human_gate: "always",
+      human_gate: true,
     },
   ],
 };

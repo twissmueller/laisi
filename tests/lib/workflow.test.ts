@@ -129,4 +129,48 @@ phases:
     const wf = loadWorkflow(LAISI_HOME, "github-issue-intake");
     expect(wf.phases[0].type).toBeUndefined();
   });
+
+  it("accepts boolean human_gate values", () => {
+    writeFileSync(join(tmpDir, "workflows", "bool-gate.yml"), `
+workflow: bool-gate
+description: test
+phases:
+  - id: intent
+    description: Extract intent
+    input: 0-issue.json
+    output: 1-intent.xml
+    schema: schemas/intent.xsd
+    prompt: prompts/01-intent.md
+    max_retries: 3
+    human_gate: true
+  - id: scope
+    description: Define scope
+    input: 1-intent.xml
+    output: 2-scope.xml
+    schema: schemas/scope.xsd
+    prompt: prompts/02-scope.md
+    max_retries: 3
+    human_gate: false
+`);
+    const wf = loadWorkflow(tmpDir, "bool-gate");
+    expect(wf.phases[0].human_gate).toBe(true);
+    expect(wf.phases[1].human_gate).toBe(false);
+  });
+
+  it("rejects non-boolean human_gate values", () => {
+    writeFileSync(join(tmpDir, "workflows", "bad-gate.yml"), `
+workflow: bad-gate
+description: test
+phases:
+  - id: intent
+    description: Extract intent
+    input: 0-issue.json
+    output: 1-intent.xml
+    schema: schemas/intent.xsd
+    prompt: prompts/01-intent.md
+    max_retries: 3
+    human_gate: always
+`);
+    expect(() => loadWorkflow(tmpDir, "bad-gate")).toThrow(/must be true or false/);
+  });
 });

@@ -10,10 +10,7 @@ import { parse } from "yaml";
 
 // ─── Types ─────────────────────────────────────────────────
 
-export type HumanGateConfig =
-  | "always"
-  | "on_failure"
-  | { on_field: string; value: string };
+export type HumanGateConfig = boolean;
 
 export interface PhaseDefinition {
   id: string;
@@ -93,23 +90,10 @@ export function loadWorkflow(
     }
 
     // Validate human_gate type if present
-    if (phase.human_gate !== undefined) {
-      const validTypes =
-        typeof phase.human_gate === "string" &&
-        (phase.human_gate === "always" || phase.human_gate === "on_failure");
-      const validObject =
-        typeof phase.human_gate === "object" &&
-        phase.human_gate !== null &&
-        "on_field" in phase.human_gate &&
-        "value" in phase.human_gate &&
-        typeof phase.human_gate.on_field === "string" &&
-        typeof phase.human_gate.value === "string";
-
-      if (!validTypes && !validObject) {
-        throw new Error(
-          `Invalid human_gate in phase "${phase.id}" in ${filePath}: must be "always", "on_failure", or an object with on_field and value string properties`,
-        );
-      }
+    if (phase.human_gate !== undefined && typeof phase.human_gate !== "boolean") {
+      throw new Error(
+        `Invalid human_gate in phase "${phase.id}" in ${filePath}: must be true or false`,
+      );
     }
 
     phase.max_retries = phase.max_retries ?? 3;

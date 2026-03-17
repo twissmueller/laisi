@@ -39,40 +39,16 @@ describe("buildRetryPrompt", () => {
 });
 
 describe("evaluateHumanGate", () => {
-  it("returns true for 'always' gate", () => {
-    expect(evaluateHumanGate("always", {}, "root")).toBe(true);
+  it("returns true when gate is true", () => {
+    expect(evaluateHumanGate(true)).toBe(true);
   });
 
-  it("returns false for 'on_failure' gate", () => {
-    expect(evaluateHumanGate("on_failure", {}, "root")).toBe(false);
+  it("returns false when gate is false", () => {
+    expect(evaluateHumanGate(false)).toBe(false);
   });
 
-  it("returns false for undefined gate", () => {
-    expect(evaluateHumanGate(undefined, {}, "root")).toBe(false);
-  });
-
-  it("triggers on_field gate when field matches", () => {
-    const data = { intent: { ambiguous: "true", objective: "test" } };
-    const gate = { on_field: "ambiguous", value: "true" };
-    expect(evaluateHumanGate(gate, data, "intent")).toBe(true);
-  });
-
-  it("does not trigger on_field gate when field does not match", () => {
-    const data = { intent: { ambiguous: "false", objective: "test" } };
-    const gate = { on_field: "ambiguous", value: "true" };
-    expect(evaluateHumanGate(gate, data, "intent")).toBe(false);
-  });
-
-  it("handles dot-notation paths in on_field", () => {
-    const data = { intent: { meta: { status: "blocked" } } };
-    const gate = { on_field: "meta.status", value: "blocked" };
-    expect(evaluateHumanGate(gate, data, "intent")).toBe(true);
-  });
-
-  it("returns false when field path does not exist", () => {
-    const data = { intent: { objective: "test" } };
-    const gate = { on_field: "nonexistent.field", value: "true" };
-    expect(evaluateHumanGate(gate, data, "intent")).toBe(false);
+  it("returns false when gate is undefined", () => {
+    expect(evaluateHumanGate(undefined)).toBe(false);
   });
 });
 

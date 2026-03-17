@@ -17,7 +17,6 @@ import { scanAllIssues, ensureIssueDir } from "../lib/state.js";
 import { loadConfig } from "../lib/config.js";
 import { loadWorkflow } from "../lib/workflow.js";
 import { runPhase, evaluateHumanGate } from "../lib/run-phase.js";
-import { extractSchemaShape } from "../lib/schema.js";
 
 export interface RunOptions {
   dryRun: boolean;
@@ -111,13 +110,10 @@ export async function run(opts: RunOptions): Promise<void> {
     const result = await runPhase(phase, issueDir, opts.laisiHome, repoRoot);
 
     // ── 6. Handle human gate ──
-    if (result.success && result.data && phase.human_gate) {
-      const shape = extractSchemaShape(join(opts.laisiHome, phase.schema));
-      if (evaluateHumanGate(phase.human_gate, result.data, shape.rootElement)) {
-        const pendingPath = `${result.outputPath}.pending`;
-        renameSync(result.outputPath!, pendingPath);
-        log(`  ⏸ Human gate triggered → ${pendingPath}`);
-      }
+    if (result.success && evaluateHumanGate(phase.human_gate)) {
+      const pendingPath = `${result.outputPath}.pending`;
+      renameSync(result.outputPath!, pendingPath);
+      log(`  ⏸ Human gate triggered → ${pendingPath}`);
     }
 
     // ── 7. Commit & Push ──

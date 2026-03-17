@@ -307,29 +307,8 @@ export async function runPhase(
 
 export function evaluateHumanGate(
   gate: HumanGateConfig | undefined,
-  data: Record<string, unknown>,
-  rootElement: string,
 ): boolean {
-  if (!gate) return false;
-  if (gate === "always") return true;
-  if (gate === "on_failure") return false;
-
-  // { on_field, value } — check parsed data
-  const root = data[rootElement] as Record<string, unknown> | undefined;
-  if (!root) return false;
-
-  const fieldValue = getNestedField(root, gate.on_field);
-  return String(fieldValue) === gate.value;
-}
-
-function getNestedField(obj: Record<string, unknown>, path: string): unknown {
-  const parts = path.split(".");
-  let current: unknown = obj;
-  for (const part of parts) {
-    if (typeof current !== "object" || current === null) return undefined;
-    current = (current as Record<string, unknown>)[part];
-  }
-  return current;
+  return gate === true;
 }
 
 function escapeXml(s: string): string {

@@ -12,9 +12,7 @@ phases:
     schema: schemas/intent.xsd
     prompt: prompts/01-intent.md
     max_retries: 3
-    human_gate:
-      on_field: ambiguous
-      value: "true"
+    human_gate: true
 
   - id: scope
     description: Map the IntentSpec to concrete changes in the codebase
@@ -23,4 +21,4 @@ phases:
     schema: schemas/scope.xsd
     prompt: prompts/02-scope.md
     max_retries: 3
-    human_gate: always
+    human_gate: true
