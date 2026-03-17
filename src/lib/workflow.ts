@@ -19,6 +19,7 @@ export interface PhaseDefinition {
   output: string;
   schema: string;
   max_retries: number;
+  max_clarify_rounds: number;
   human_gate?: HumanGateConfig;
   // LLM-specific:
   prompt?: string;
@@ -111,6 +112,7 @@ export function loadWorkflow(
     }
 
     phase.max_retries = phase.max_retries ?? 3;
+    phase.max_clarify_rounds = phase.max_clarify_rounds ?? 5;
   }
 
   return doc;

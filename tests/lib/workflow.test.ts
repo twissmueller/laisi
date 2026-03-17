@@ -244,6 +244,41 @@ phases:
     expect(() => loadWorkflow(tmpDir, "bad-agent")).toThrow(/should not have "script"/);
   });
 
+  it("accepts max_clarify_rounds field", () => {
+    writeFileSync(join(tmpDir, "workflows", "clarify.yml"), `
+workflow: clarify
+description: test
+phases:
+  - id: explore
+    description: Explore
+    input: 0-issue.json
+    output: 1-explore.xml
+    schema: schemas/explore.xsd
+    prompt: prompts/explore.txt
+    max_retries: 3
+    max_clarify_rounds: 5
+`);
+    const wf = loadWorkflow(tmpDir, "clarify");
+    expect(wf.phases[0].max_clarify_rounds).toBe(5);
+  });
+
+  it("defaults max_clarify_rounds to 5", () => {
+    writeFileSync(join(tmpDir, "workflows", "clarify-default.yml"), `
+workflow: clarify-default
+description: test
+phases:
+  - id: explore
+    description: Explore
+    input: 0-issue.json
+    output: 1-explore.xml
+    schema: schemas/explore.xsd
+    prompt: prompts/explore.txt
+    max_retries: 3
+`);
+    const wf = loadWorkflow(tmpDir, "clarify-default");
+    expect(wf.phases[0].max_clarify_rounds).toBe(5);
+  });
+
   it("rejects non-boolean human_gate values", () => {
     writeFileSync(join(tmpDir, "workflows", "bad-gate.yml"), `
 workflow: bad-gate
