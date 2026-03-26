@@ -1,95 +1,58 @@
 /**
- * Workflow-Driven State Management
+ * Workflow State Scanner
  *
- * Reads the workflow state from the .issues/ directory.
- * No hardcoded phases — the WorkflowDefinition drives everything.
+ * Scans the .laisi/ runtime directory to determine which steps
+ * are done, failed, next, or pending.
  */
-import { readdirSync, existsSync, mkdirSync } from "node:fs";
-import { join, basename } from "node:path";
-import type { WorkflowDefinition, PhaseDefinition } from "./workflow.js";
+import { existsSync, readdirSync } from "node:fs";
+import type { WorkflowDefinition, StepDefinition } from "./workflow.js";
 
-// ─── Issue State ───────────────────────────────────────────
+// ─── Types ─────────────────────────────────────────────────
 
-export interface IssueState {
-  issueNumber: number;
-  workflowId: string;
-  completedPhases: string[];
-  pendingPhase: string | null;
-  clarifyPhase: string | null;
-  nextPhase: PhaseDefinition | null;
+export type StepStatus = "done" | "failed" | "next" | "pending";
+
+export interface StepState {
+  step: StepDefinition;
+  status: StepStatus;
 }
 
-// ─── Scan a single issue directory ─────────────────────────
+// ─── Scanner ───────────────────────────────────────────────
 
-export function scanIssue(
-  issueDir: string,
+export function scanWorkflow(
+  laisiDir: string,
   workflow: WorkflowDefinition,
-): IssueState {
-  const nr = parseInt(basename(issueDir), 10);
-  const completedPhases: string[] = [];
-  let pendingPhase: string | null = null;
-  let clarifyPhase: string | null = null;
-  let nextPhase: PhaseDefinition | null = null;
+): StepState[] {
+  const files = existsSync(laisiDir)
+    ? new Set(readdirSync(laisiDir))
+    : new Set<string>();
 
-  const files = existsSync(issueDir) ? new Set(readdirSync(issueDir)) : new Set<string>();
+  let foundNext = false;
+  const states: StepState[] = [];
 
-  for (const phase of workflow.phases) {
-    // Check for pending/gate states
-    if (files.has(`${phase.output}.pending`) || files.has(`${phase.output}.gate`)) {
-      pendingPhase = phase.id;
-      break;
+  for (const step of workflow.steps) {
+    const outputFile = `${step.id}.xml`;
+    const failedFile = `${step.id}.xml.failed`;
+
+    if (files.has(outputFile)) {
+      states.push({ step, status: "done" });
+    } else if (files.has(failedFile)) {
+      states.push({ step, status: "failed" });
+      foundNext = true; // block subsequent steps
+    } else if (!foundNext) {
+      // Check if predecessor is done
+      const predecessorDone = !step.predecessor ||
+        states.some((s) => s.step.id === step.predecessor && s.status === "done");
+
+      if (predecessorDone) {
+        states.push({ step, status: "next" });
+        foundNext = true;
+      } else {
+        states.push({ step, status: "pending" });
+      }
+    } else {
+      states.push({ step, status: "pending" });
     }
-
-    // Check for .clarify state
-    if (files.has(`${phase.output}.clarify`)) {
-      clarifyPhase = phase.id;
-      nextPhase = phase;
-      break;
-    }
-
-    // Check for completed output
-    if (files.has(phase.output)) {
-      completedPhases.push(phase.id);
-      continue;
-    }
-
-    // Output missing — check if input exists
-    if (files.has(phase.input)) {
-      nextPhase = phase;
-      break;
-    }
-
-    // Input doesn't exist either — blocked
-    break;
   }
 
-  return {
-    issueNumber: nr,
-    workflowId: workflow.workflow,
-    completedPhases,
-    pendingPhase,
-    clarifyPhase,
-    nextPhase,
-  };
-}
-
-// ─── Scan all issues ───────────────────────────────────────
-
-export function scanAllIssues(
-  issuesDir: string,
-  workflow: WorkflowDefinition,
-): IssueState[] {
-  if (!existsSync(issuesDir)) return [];
-
-  return readdirSync(issuesDir)
-    .filter((name) => /^\d+$/.test(name))
-    .map((name) => scanIssue(join(issuesDir, name), workflow));
-}
-
-// ─── Ensure issue directory exists ─────────────────────────
-
-export function ensureIssueDir(issuesDir: string, nr: number): string {
-  const dir = join(issuesDir, String(nr));
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  return dir;
+  return states;
 }
