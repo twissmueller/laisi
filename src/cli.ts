@@ -1,15 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * LAISI CLI – Let AI Supervise Itself
- *
- * Usage:
- *   laisi                  Run one step (default)
- *   laisi --dry-run        Show what would run
- *   laisi status           Show status of all issues
- *   laisi init             Initialize .issues/ in current repo
- *   laisi init --workflow <name>  Initialize with a specific workflow
- *   laisi help             Show help
+ * LAISI CLI — Let AI Supervise Itself
  */
 
 import { resolve, dirname } from "node:path";
@@ -19,8 +11,7 @@ import { run } from "./commands/run.js";
 import { status } from "./commands/status.js";
 import { init } from "./commands/init.js";
 
-
-// ── LAISI's own directory (for schemas/ and prompts/) ──
+// ── LAISI's own directory (for built-in workflow templates) ──
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 export const LAISI_HOME = resolve(__dirname, "..");
@@ -28,41 +19,37 @@ export const LAISI_HOME = resolve(__dirname, "..");
 // ── CLI Parsing ──
 const args = process.argv.slice(2);
 const command = args[0] ?? "run";
-const flags = new Set(args.slice(1));
 
-function parseIssueFlag(): number | undefined {
-  for (const arg of args) {
-    if (arg.startsWith("--issue=")) return parseInt(arg.slice(8), 10);
-  }
-  const idx = args.indexOf("--issue");
-  if (idx !== -1 && args[idx + 1]) return parseInt(args[idx + 1], 10);
-  return undefined;
+function hasFlag(flag: string): boolean {
+  return args.includes(flag);
 }
 
-function parseWorkflowFlag(): string | undefined {
-  for (const arg of args) {
-    if (arg.startsWith("--workflow=")) return arg.slice(11);
-  }
-  const idx = args.indexOf("--workflow");
+function getFlagValue(flag: string): string | undefined {
+  const idx = args.indexOf(flag);
   if (idx !== -1 && args[idx + 1]) return args[idx + 1];
+  for (const arg of args) {
+    if (arg.startsWith(`${flag}=`)) return arg.slice(flag.length + 1);
+  }
   return undefined;
 }
 
 switch (command) {
   case "run":
-    await run({ dryRun: flags.has("--dry-run"), issueNumber: parseIssueFlag(), laisiHome: LAISI_HOME });
-    break;
-
-  case "--dry-run":
-    await run({ dryRun: true, issueNumber: parseIssueFlag(), laisiHome: LAISI_HOME });
+    await run({
+      all: hasFlag("--all"),
+      stepId: getFlagValue("--step"),
+    });
     break;
 
   case "status":
-    status({ laisiHome: LAISI_HOME });
+    status();
     break;
 
   case "init":
-    init({ workflow: parseWorkflowFlag() });
+    init({
+      workflow: getFlagValue("--workflow"),
+      laisiHome: LAISI_HOME,
+    });
     break;
 
   case "help":
@@ -84,20 +71,16 @@ switch (command) {
 
 function printHelp(): void {
   console.log(`
-LAISI – Let AI Supervise Itself
+LAISI — Let AI Supervise Itself
 
 Usage:
-  laisi                          Run one workflow step
-  laisi --dry-run                Show what would run without executing
-  laisi status                   Show status of all tracked issues
-  laisi init                     Initialize .issues/ directory
-  laisi init --workflow <name>   Initialize with a specific workflow
+  laisi                          Run the next workflow step
+  laisi run --all                Run all remaining steps
+  laisi run --step <id>          Run a specific step
+  laisi status                   Show workflow progress
+  laisi init                     Scaffold .laisi.yml + .laisi/
+  laisi init --workflow <name>   Initialize with a built-in workflow
   laisi help                     Show this help
-
-Each invocation executes exactly ONE step on the highest-priority
-issue, then exits. Set up a cron job for continuous operation:
-
-  */15 * * * * cd /path/to/repo && laisi >> .issues/orchestrator.log 2>&1
 `);
 }
 

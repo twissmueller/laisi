@@ -1,51 +1,65 @@
 /**
- * `laisi init` – Initializes .issues/ in the current repo
+ * `laisi init` — Scaffold .laisi.yml + .laisi/ directory
+ *
+ * With --workflow <name>: copies built-in workflow template into project.
  */
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync, cpSync } from "node:fs";
 import { join } from "node:path";
-import { parse, stringify } from "yaml";
-import { getRepoRoot } from "../lib/github.js";
+import { stringify } from "yaml";
 
 export interface InitOptions {
   workflow?: string;
+  laisiHome: string;
 }
 
-export function init(opts: InitOptions = {}): void {
-  const repoRoot = getRepoRoot();
-  const issuesDir = join(repoRoot, ".issues");
-  const workflowName = opts.workflow ?? "github-issue-intake";
+export function init(opts: InitOptions): void {
+  const cwd = process.cwd();
+  const laisiDir = join(cwd, ".laisi");
+  const configPath = join(cwd, ".laisi.yml");
 
-  if (!existsSync(issuesDir)) {
-    mkdirSync(issuesDir, { recursive: true });
-
-    // .gitkeep so the directory is tracked in git
-    writeFileSync(join(issuesDir, ".gitkeep"), "");
-
-    console.log(`✅ .issues/ created in ${repoRoot}`);
+  // Create .laisi/ runtime directory
+  if (!existsSync(laisiDir)) {
+    mkdirSync(laisiDir, { recursive: true });
+    writeFileSync(join(laisiDir, ".gitkeep"), "");
+    console.log(".laisi/ created");
   } else {
-    console.log(`✅ .issues/ already exists in ${repoRoot}`);
+    console.log(".laisi/ already exists");
   }
 
-  // Manage .laisi.yml
-  const configPath = join(repoRoot, ".laisi.yml");
-  if (!existsSync(configPath)) {
-    writeFileSync(configPath, stringify({ workflow: workflowName }));
-    console.log(`✅ .laisi.yml created with workflow: ${workflowName}`);
-  } else {
-    const raw = readFileSync(configPath, "utf-8");
-    const config = (parse(raw) as Record<string, unknown>) ?? {};
-    if (!config.workflow) {
-      config.workflow = workflowName;
-      writeFileSync(configPath, stringify(config));
-      console.log(`✅ .laisi.yml updated with workflow: ${workflowName}`);
-    } else {
-      console.log(`  .laisi.yml already has workflow: ${config.workflow}`);
+  // Copy built-in workflow template if requested
+  let workflowPath: string | undefined;
+  if (opts.workflow) {
+    const templateDir = join(opts.laisiHome, "workflows", opts.workflow);
+    if (!existsSync(templateDir)) {
+      console.error(`Built-in workflow "${opts.workflow}" not found at ${templateDir}`);
+      process.exit(1);
     }
+    const targetDir = join(cwd, "workflows", opts.workflow);
+    if (!existsSync(targetDir)) {
+      mkdirSync(targetDir, { recursive: true });
+      cpSync(templateDir, targetDir, { recursive: true });
+      console.log(`Workflow copied to workflows/${opts.workflow}/`);
+    } else {
+      console.log(`workflows/${opts.workflow}/ already exists, skipping copy`);
+    }
+    workflowPath = `workflows/${opts.workflow}`;
+  }
+
+  // Create or update .laisi.yml
+  if (!existsSync(configPath)) {
+    writeFileSync(configPath, stringify({ workflow: workflowPath ?? "" }));
+    console.log(`.laisi.yml created${workflowPath ? ` with workflow: ${workflowPath}` : ""}`);
+  } else {
+    console.log(".laisi.yml already exists");
   }
 
   console.log("");
   console.log("Next steps:");
-  console.log("  1. Make sure you have GitHub issues assigned to you");
-  console.log("  2. Start with: laisi run");
+  if (!workflowPath) {
+    console.log("  1. Create a workflow directory with workflow.yml, .xsd, and .md files");
+    console.log("  2. Set 'workflow' in .laisi.yml to point to your workflow directory");
+  }
+  console.log("  laisi run          Run the next step");
+  console.log("  laisi run --all    Run all remaining steps");
   console.log("");
 }
