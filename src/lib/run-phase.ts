@@ -1,26 +1,21 @@
 /**
- * runPhase() — The Core Loop
+ * runStep() — The Core Loop
  *
- * Identical for every phase. Generates XML skeleton, calls Claude,
- * validates response, retries on failure, writes output file.
- * The CLI is the referee — the LLM only produces content.
+ * For every workflow step: optional pre-script, call Claude with prompt + predecessor XML,
+ * validate XML against XSD, retry on failure, optional post-script.
+ * Writes .failed marker when all retries exhausted.
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { execSync } from "node:child_process";
-import { parse as parseYaml } from "yaml";
 import { log } from "./logger.js";
-import { generateSkeleton, extractSchemaShape, getArrayElements, dataToXml } from "./schema.js";
+import { generateSkeleton, extractSchemaShape, getArrayElements } from "./schema.js";
 import { callClaude, extractXml, validateXml, parseXml, loadPrompt } from "./claude.js";
-import type { PhaseDefinition, HumanGateConfig } from "./workflow.js";
-
-// ─── Constants ──────────────────────────────────────────────
-
-const LLM_AGENT_TOOLS = ["Edit", "Write", "Read", "Bash", "Glob", "Grep"];
+import type { StepDefinition } from "./workflow.js";
 
 // ─── Types ─────────────────────────────────────────────────
 
-export interface PhaseResult {
+export interface StepResult {
   success: boolean;
   outputPath?: string;
   data?: Record<string, unknown>;
@@ -31,14 +26,20 @@ export interface PhaseResult {
 
 export function buildPrompt(
   systemPrompt: string,
-  inputContent: string,
+  predecessorXml: string | undefined,
   skeleton: string,
 ): string {
-  return `${systemPrompt}
+  let prompt = systemPrompt;
 
-## Input
+  if (predecessorXml) {
+    prompt += `
 
-${inputContent}
+## Predecessor Output
+
+${predecessorXml}`;
+  }
+
+  prompt += `
 
 ## XML Skeleton
 
@@ -46,29 +47,22 @@ Fill this XML skeleton. Return ONLY the filled XML, no text before or after.
 Start with <?xml version="1.0" encoding="UTF-8"?>
 
 ${skeleton}`;
+
+  return prompt;
 }
 
 export function buildRetryPrompt(
   systemPrompt: string,
-  inputContent: string,
+  predecessorXml: string | undefined,
   skeleton: string,
   previousOutput: string,
   validationError: string,
   attempt: number,
   maxAttempts: number,
 ): string {
-  return `${systemPrompt}
+  let prompt = buildPrompt(systemPrompt, predecessorXml, skeleton);
 
-## Input
-
-${inputContent}
-
-## XML Skeleton
-
-Fill this XML skeleton. Return ONLY the filled XML, no text before or after.
-Start with <?xml version="1.0" encoding="UTF-8"?>
-
-${skeleton}
+  prompt += `
 
 ## Attempt ${attempt + 1} of ${maxAttempts}
 
@@ -81,247 +75,162 @@ This output failed validation with the following error:
 ${validationError}
 
 Please correct and output ONLY valid XML that conforms to the skeleton structure.`;
-}
 
-// ─── Script Output Conversion ──────────────────────────────
-
-export function convertScriptOutput(
-  raw: string,
-  format: "xml" | "json" | "yaml",
-  xsdPath: string,
-): string {
-  switch (format) {
-    case "xml":
-      return extractXml(raw);
-    case "json": {
-      const data = JSON.parse(raw) as Record<string, unknown>;
-      return dataToXml(data, xsdPath);
-    }
-    case "yaml": {
-      const data = parseYaml(raw) as Record<string, unknown>;
-      return dataToXml(data, xsdPath);
-    }
-  }
+  return prompt;
 }
 
 // ─── Script Execution ──────────────────────────────────────
 
-function executeScript(
-  scriptPath: string,
-  inputContent: string,
-  env: Record<string, string>,
-  repoRoot: string,
-): string {
+function executeShellCommand(
+  command: string,
+  stepId: string,
+  workingDir: string,
+): void {
   try {
-    return execSync(scriptPath, {
-      input: inputContent,
+    execSync(command, {
       encoding: "utf-8",
-      maxBuffer: 10 * 1024 * 1024,
       timeout: 5 * 60 * 1000,
       stdio: ["pipe", "pipe", "pipe"],
-      cwd: repoRoot,
-      env: { ...process.env, ...env },
+      cwd: workingDir,
+      env: {
+        ...process.env,
+        LAISI_STEP_ID: stepId,
+        LAISI_WORKING_DIR: workingDir,
+      },
     });
   } catch (err: unknown) {
     const e = err as { status?: number; stderr?: string; killed?: boolean };
     if (e.killed) {
-      throw new Error("Script timed out after 5 minutes");
+      throw new Error(`Script timed out after 5 minutes: ${command}`);
     }
     const stderr = typeof e.stderr === "string" ? e.stderr.trim() : "";
-    throw new Error(`Script exited with code ${e.status ?? 1}: ${stderr}`);
+    throw new Error(`Script failed (exit ${e.status ?? 1}): ${stderr}`);
   }
 }
 
 // ─── Core Loop ─────────────────────────────────────────────
 
-export async function runPhase(
-  phase: PhaseDefinition,
-  issueDir: string,
-  laisiHome: string,
+export async function runStep(
+  step: StepDefinition,
+  workflowDir: string,
+  laisiDir: string,
+  maxRetries: number,
   repoRoot: string,
-  promptVars?: Record<string, string>,
-): Promise<PhaseResult> {
-  const maxAttempts = phase.max_retries;
-  const schemaPath = join(laisiHome, phase.schema);
+): Promise<StepResult> {
+  const schemaPath = join(workflowDir, `${step.id}.xsd`);
+  const promptPath = join(workflowDir, `${step.id}.md`);
+  const outputPath = join(laisiDir, `${step.id}.xml`);
+
+  // Load predecessor XML if applicable
+  let predecessorXml: string | undefined;
+  if (step.predecessor) {
+    const predecessorPath = join(laisiDir, `${step.predecessor}.xml`);
+    if (!existsSync(predecessorPath)) {
+      return { success: false, error: `Predecessor output missing: ${predecessorPath}` };
+    }
+    predecessorXml = readFileSync(predecessorPath, "utf-8");
+  }
+
+  // Run pre-script
+  if (step.pre_script) {
+    log(`  Pre-script: ${step.pre_script}`);
+    try {
+      executeShellCommand(step.pre_script, step.id, repoRoot);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      log(`  Pre-script failed: ${message}`);
+      return { success: false, error: `Pre-script failed: ${message}` };
+    }
+  }
+
+  // Load schema and prompt
   const shape = extractSchemaShape(schemaPath);
   const arrayElements = getArrayElements(schemaPath);
-  const outputPath = join(issueDir, phase.output);
+  const skeleton = generateSkeleton(schemaPath);
+  const systemPrompt = loadPrompt(promptPath, {});
 
-  // Load input content
-  const inputPath = join(issueDir, phase.input);
-  const inputContent = readFileSync(inputPath, "utf-8");
+  log(`  Skeleton generated for <${shape.rootElement}>`);
 
   let lastOutput = "";
   let lastError = "";
 
-  if (phase.type === "script") {
-    // ── Script execution path ──
-    const scriptPath = join(laisiHome, phase.script!);
-    const format = phase.output_format ?? "xml";
-    log(`  Script phase: ${scriptPath} (format: ${format})`);
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    log(`  Claude call (attempt ${attempt + 1}/${maxRetries})...`);
 
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      log(`  Script run (attempt ${attempt + 1}/${maxAttempts})...`);
+    const prompt = attempt === 0
+      ? buildPrompt(systemPrompt, predecessorXml, skeleton)
+      : buildRetryPrompt(
+          systemPrompt, predecessorXml, skeleton,
+          lastOutput, lastError, attempt, maxRetries,
+        );
 
-      const env: Record<string, string> = {
-        LAISI_ISSUE_DIR: issueDir,
-        LAISI_INPUT_PATH: inputPath,
-        LAISI_OUTPUT_PATH: outputPath,
-        LAISI_REPO_ROOT: repoRoot,
-        LAISI_VALIDATION_ERROR: lastError,
-      };
+    try {
+      const raw = callClaude(prompt);
 
+      let xml: string;
       try {
-        const stdout = executeScript(scriptPath, inputContent, env, repoRoot);
+        xml = extractXml(raw);
+      } catch {
+        lastOutput = raw;
+        lastError = "No valid XML found in output.";
+        log(`  ${lastError}`);
+        continue;
+      }
 
-        // Convert output format
-        let xml: string;
+      const validation = validateXml(xml);
+      if (!validation.valid) {
+        lastOutput = xml;
+        lastError = validation.error!;
+        log(`  Invalid XML: ${lastError}`);
+        continue;
+      }
+
+      const data = parseXml<Record<string, unknown>>(xml, arrayElements);
+
+      if (!(shape.rootElement in data)) {
+        const actualRoots = Object.keys(data).filter((k) => k !== "?xml");
+        lastOutput = xml;
+        lastError = `Wrong root element: expected <${shape.rootElement}>, found <${actualRoots[0] ?? "??"}>`;
+        log(`  ${lastError}`);
+        continue;
+      }
+
+      const root = data[shape.rootElement] as Record<string, unknown>;
+      const missingChildren = shape.requiredChildren.filter((c) => !(c in root));
+      if (missingChildren.length > 0) {
+        lastOutput = xml;
+        lastError = `Missing required elements in <${shape.rootElement}>: ${missingChildren.join(", ")}`;
+        log(`  ${lastError}`);
+        continue;
+      }
+
+      writeFileSync(outputPath, xml);
+      log(`  XML written: ${outputPath}`);
+
+      // Run post-script
+      if (step.post_script) {
+        log(`  Post-script: ${step.post_script}`);
         try {
-          xml = convertScriptOutput(stdout, format, schemaPath);
+          executeShellCommand(step.post_script, step.id, repoRoot);
         } catch (err) {
-          lastOutput = stdout;
-          lastError = `Output conversion failed: ${err instanceof Error ? err.message : String(err)}`;
-          log(`  ⚠️ ${lastError}`);
-          continue;
+          log(`  Post-script failed: ${err instanceof Error ? err.message : String(err)}`);
+          // Post-script failure is non-fatal — output is already written
         }
-
-        // Validate
-        const validation = validateXml(xml);
-        if (!validation.valid) {
-          lastOutput = xml;
-          lastError = validation.error!;
-          log(`  ⚠️ Invalid XML: ${lastError}`);
-          continue;
-        }
-
-        const data = parseXml<Record<string, unknown>>(xml, arrayElements);
-        if (!(shape.rootElement in data)) {
-          const actualRoots = Object.keys(data).filter((k) => k !== "?xml");
-          lastOutput = xml;
-          lastError = `Wrong root element: expected <${shape.rootElement}>, found <${actualRoots[0] ?? "??"}>`;
-          log(`  ⚠️ ${lastError}`);
-          continue;
-        }
-
-        const root = data[shape.rootElement] as Record<string, unknown>;
-        const missingChildren = shape.requiredChildren.filter((c) => !(c in root));
-        if (missingChildren.length > 0) {
-          lastOutput = xml;
-          lastError = `Missing required elements in <${shape.rootElement}>: ${missingChildren.join(", ")}`;
-          log(`  ⚠️ ${lastError}`);
-          continue;
-        }
-
-        writeFileSync(outputPath, xml);
-        log(`  ✅ XML written: ${outputPath}`);
-        return { success: true, outputPath, data };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        lastOutput = "";
-        lastError = message;
-        log(`  ❌ Error: ${message}`);
       }
-    }
-  } else {
-    // ── LLM execution path (existing) ──
-    const skeleton = generateSkeleton(schemaPath);
-    log(`  Skeleton generated for <${shape.rootElement}>`);
 
-    const promptPath = join(laisiHome, phase.prompt!);
-    const systemPrompt = loadPrompt(promptPath, promptVars ?? {});
-    const isAgent = phase.type === "llm-agent";
-    const tools = isAgent ? LLM_AGENT_TOOLS : phase.tools;
-    const cwd = isAgent ? (phase.cwd ?? repoRoot) : (phase.cwd === "repo_root" ? repoRoot : undefined);
-
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      log(`  Claude call (attempt ${attempt + 1}/${maxAttempts})...`);
-
-      const prompt = attempt === 0
-        ? buildPrompt(systemPrompt, inputContent, skeleton)
-        : buildRetryPrompt(
-            systemPrompt, inputContent, skeleton,
-            lastOutput, lastError, attempt, maxAttempts,
-          );
-
-      try {
-        const raw = callClaude(prompt, cwd, tools);
-
-        let xml: string;
-        try {
-          xml = extractXml(raw);
-        } catch {
-          lastOutput = raw;
-          lastError = "No valid XML found in output.";
-          log(`  ⚠️ ${lastError}`);
-          continue;
-        }
-
-        const validation = validateXml(xml);
-        if (!validation.valid) {
-          lastOutput = xml;
-          lastError = validation.error!;
-          log(`  ⚠️ Invalid XML: ${lastError}`);
-          continue;
-        }
-
-        const data = parseXml<Record<string, unknown>>(xml, arrayElements);
-
-        if (!(shape.rootElement in data)) {
-          const actualRoots = Object.keys(data).filter((k) => k !== "?xml");
-          lastOutput = xml;
-          lastError = `Wrong root element: expected <${shape.rootElement}>, found <${actualRoots[0] ?? "??"}>`;
-          log(`  ⚠️ ${lastError}`);
-          continue;
-        }
-
-        const root = data[shape.rootElement] as Record<string, unknown>;
-        const missingChildren = shape.requiredChildren.filter((c) => !(c in root));
-        if (missingChildren.length > 0) {
-          lastOutput = xml;
-          lastError = `Missing required elements in <${shape.rootElement}>: ${missingChildren.join(", ")}`;
-          log(`  ⚠️ ${lastError}`);
-          continue;
-        }
-
-        writeFileSync(outputPath, xml);
-        log(`  ✅ XML written: ${outputPath}`);
-        return { success: true, outputPath, data };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        lastOutput = "";
-        lastError = message;
-        log(`  ❌ Error: ${message}`);
-      }
+      return { success: true, outputPath, data };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      lastOutput = "";
+      lastError = message;
+      log(`  Error: ${message}`);
     }
   }
 
-  // All attempts exhausted — write .gate file
-  const gatePath = `${outputPath}.gate`;
-  const gateXml = `<?xml version="1.0" encoding="UTF-8"?>
-<gate>
-  <phase>${phase.id}</phase>
-  <attempts>${maxAttempts}</attempts>
-  <last_error>${escapeXml(lastError)}</last_error>
-  <last_output>${escapeXml(lastOutput)}</last_output>
-</gate>`;
-  writeFileSync(gatePath, gateXml);
-  log(`  ❌ All ${maxAttempts} attempts failed. Gate written: ${gatePath}`);
+  // All attempts exhausted — write .failed marker
+  const failedPath = `${outputPath}.failed`;
+  writeFileSync(failedPath, `${lastError}\n\nLast output:\n${lastOutput}`);
+  log(`  All ${maxRetries} attempts failed. Marker written: ${failedPath}`);
 
   return { success: false, error: lastError };
-}
-
-// ─── Human Gate Evaluation ─────────────────────────────────
-
-export function evaluateHumanGate(
-  gate: HumanGateConfig | undefined,
-): boolean {
-  return gate === true;
-}
-
-function escapeXml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
