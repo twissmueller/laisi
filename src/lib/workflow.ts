@@ -1,8 +1,8 @@
 /**
  * Workflow Definition Loader
  *
- * Loads workflow YAML files from {laisiHome}/workflows/ and returns
- * typed WorkflowDefinition objects.
+ * Loads workflow.yml from a workflow directory and returns
+ * a typed WorkflowDefinition.
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -10,110 +10,65 @@ import { parse } from "yaml";
 
 // ─── Types ─────────────────────────────────────────────────
 
-export type HumanGateConfig = boolean;
-
-export interface PhaseDefinition {
+export interface StepDefinition {
   id: string;
   description: string;
-  input: string;
-  output: string;
-  schema: string;
-  max_retries: number;
-  max_clarify_rounds: number;
-  human_gate?: HumanGateConfig;
-  // LLM-specific:
-  prompt?: string;
-  tools?: string[];
-  cwd?: string;
-  // Script-specific:
-  type?: "llm" | "llm-agent" | "script";
-  script?: string;
-  output_format?: "xml" | "json" | "yaml";
+  predecessor?: string;
+  pre_script?: string;
+  post_script?: string;
 }
 
 export interface WorkflowDefinition {
   workflow: string;
   description: string;
-  phases: PhaseDefinition[];
+  max_retries: number;
+  steps: StepDefinition[];
 }
 
 // ─── Loader ────────────────────────────────────────────────
 
-export function loadWorkflow(
-  laisiHome: string,
-  workflowName: string,
-): WorkflowDefinition {
-  const filePath = join(laisiHome, "workflows", `${workflowName}.yml`);
+export function loadWorkflow(workflowDir: string): WorkflowDefinition {
+  const filePath = join(workflowDir, "workflow.yml");
 
   let raw: string;
   try {
     raw = readFileSync(filePath, "utf-8");
   } catch {
+    throw new Error(`Workflow not found at ${filePath}`);
+  }
+
+  const doc = parse(raw) as Record<string, unknown>;
+
+  if (!doc.workflow || !doc.description || !doc.steps || !Array.isArray(doc.steps)) {
     throw new Error(
-      `Workflow "${workflowName}" not found at ${filePath}`,
+      `Invalid workflow file: ${filePath} — missing "workflow", "description", or "steps" field`,
     );
   }
 
-  const doc = parse(raw) as WorkflowDefinition;
+  const steps = doc.steps as StepDefinition[];
 
-  if (!doc.workflow || !doc.description || !doc.phases || !Array.isArray(doc.phases)) {
-    throw new Error(
-      `Invalid workflow file: ${filePath} — missing "workflow", "description", or "phases" field`,
-    );
-  }
-
-  // Derive input/output for phases that omit them (linear convention)
-  for (let i = 0; i < doc.phases.length; i++) {
-    const phase = doc.phases[i];
-    if (!phase.input) {
-      phase.input = i === 0 ? "0-issue.json" : doc.phases[i - 1].output;
+  // Validate steps
+  const ids = new Set<string>();
+  for (const step of steps) {
+    if (!step.id || !step.description) {
+      throw new Error(`Invalid step in ${filePath}: missing "id" or "description"`);
     }
-    if (!phase.output) {
-      phase.output = `${i + 1}-${phase.id}.xml`;
+    if (ids.has(step.id)) {
+      throw new Error(`Duplicate step id "${step.id}" in ${filePath}`);
     }
-  }
+    ids.add(step.id);
 
-  for (const phase of doc.phases) {
-    if (!phase.id || !phase.description || !phase.input || !phase.output || !phase.schema) {
+    if (step.predecessor && !ids.has(step.predecessor)) {
       throw new Error(
-        `Invalid phase in ${filePath}: missing required field in phase "${phase.id ?? "unknown"}"`,
+        `Step "${step.id}" has predecessor "${step.predecessor}" which is not defined before it in ${filePath}`,
       );
     }
-
-    // Type-specific validation
-    const isScript = phase.type === "script";
-    const isLlm = !phase.type || phase.type === "llm" || phase.type === "llm-agent";
-    if (isScript) {
-      if (!phase.script) {
-        throw new Error(`Script phase "${phase.id}" missing required "script" field`);
-      }
-      if (phase.prompt) {
-        throw new Error(`Script phase "${phase.id}" should not have "prompt" field`);
-      }
-    } else if (isLlm) {
-      if (!phase.prompt) {
-        throw new Error(`LLM phase "${phase.id}" missing required "prompt" field`);
-      }
-      if (phase.output_format) {
-        throw new Error(`"output_format" is only valid for script phases ("${phase.id}")`);
-      }
-      if (phase.script) {
-        throw new Error(`LLM phase "${phase.id}" should not have "script" field`);
-      }
-    } else {
-      throw new Error(`Unknown phase type "${phase.type}" in phase "${phase.id}"`);
-    }
-
-    // Validate human_gate type if present
-    if (phase.human_gate !== undefined && typeof phase.human_gate !== "boolean") {
-      throw new Error(
-        `Invalid human_gate in phase "${phase.id}" in ${filePath}: must be true or false`,
-      );
-    }
-
-    phase.max_retries = phase.max_retries ?? 3;
-    phase.max_clarify_rounds = phase.max_clarify_rounds ?? 5;
   }
 
-  return doc;
+  return {
+    workflow: doc.workflow as string,
+    description: doc.description as string,
+    max_retries: (doc.max_retries as number) ?? 3,
+    steps,
+  };
 }
