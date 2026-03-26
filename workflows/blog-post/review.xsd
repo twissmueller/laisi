@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="review">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="overall_quality" type="xs:string"/>
+        <xs:element name="strengths" type="xs:string"/>
+        <xs:element name="weaknesses" type="xs:string"/>
+        <xs:element name="suggestions" type="xs:string"/>
+        <xs:element name="revised_draft" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

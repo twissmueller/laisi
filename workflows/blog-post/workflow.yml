@@ -1,0 +1,15 @@
+workflow: blog-post
+description: "Generate a blog post from a topic"
+max_retries: 3
+
+steps:
+  - id: outline
+    description: "Create a structured outline for the blog post"
+
+  - id: draft
+    description: "Write the full blog post based on the outline"
+    predecessor: outline
+
+  - id: review
+    description: "Review the draft for clarity, structure, and quality"
+    predecessor: draft
