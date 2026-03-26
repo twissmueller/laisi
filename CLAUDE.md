@@ -93,7 +93,7 @@ src/
     status.ts                 ← Overview of all steps and their state
     init.ts                   ← Initialize .laisi/ directory
   lib/
-    run-step.ts               ← The core loop (runStep)
+    run-phase.ts              ← The core loop (runStep)
     workflow.ts               ← Workflow YAML loader + types
     schema.ts                 ← XSD parsing, skeleton generation, array detection
     claude.ts                 ← Claude CLI primitives (call, extract, validate, parse)
@@ -102,7 +102,6 @@ src/
     logger.ts                 ← Logger
 tests/
   lib/                        ← Unit tests (vitest)
-  integration/                ← Integration tests (vitest, invoke Claude CLI)
 ```
 
 ### File Conventions in the Project Repo
@@ -133,6 +132,8 @@ The workflow `steps` array defines the order and dependencies. The orchestrator 
 ```typescript
 // Workflow definition (from workflow.yml)
 interface WorkflowDefinition {
+  workflow: string;
+  description: string;
   max_retries: number;
   steps: StepDefinition[];
 }
@@ -146,10 +147,11 @@ interface StepDefinition {
 }
 
 // State (derived from filesystem)
+type StepStatus = "done" | "failed" | "next" | "pending";
+
 interface StepState {
-  id: string;
-  completed: boolean;
-  failed: boolean;
+  step: StepDefinition;
+  status: StepStatus;
 }
 ```
 
