@@ -1,7 +1,7 @@
 {
   "name": "laisi",
   "version": "0.1.0",
-  "description": "Let AI Supervise Itself – Issue-driven AI Development Pipeline",
+  "description": "Let AI Supervise Itself — AI Workflow Harness with Schema Validation",
   "type": "module",
   "bin": {
     "laisi": "./dist/cli.js"
@@ -16,8 +16,6 @@
   },
   "files": [
     "dist/",
-    "schemas/",
-    "prompts/",
     "workflows/"
   ],
   "dependencies": {
