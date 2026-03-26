@@ -1,53 +1,91 @@
-# LAISI – Let AI Supervise Itself
+# LAISI -- Let AI Supervise Itself
 
-> AI agents execute, humans decide, the loop continues.
+A workflow harness for AI-generated content. Define steps in YAML, validate
+every output against XSD schemas, and let the CLI handle retries. The LLM
+produces content; LAISI makes sure it's correct.
 
-An issue-driven development pipeline where GitHub Issues flow through
-six phases, each executed by a single Claude session that produces a
-schema-validated XML document. The filesystem is the state.
-
-## Phases
-
-| # | Phase   | Input             | Output          | Human Gate        |
-|---|---------|-------------------|-----------------|-------------------|
-| 1 | Explore | 0-issue.json      | 1-explore-N.xml | On open questions |
-| 2 | Plan    | 1-explore-N.xml   | 2-plan-N.xml    | Optional          |
-| 3 | Do      | 2-plan-N.xml      | 3-do-N.xml      | No                |
-| 4 | Check   | 3-do-N.xml + Code | 4-check-N.xml   | On problems       |
-| 5 | Act     | 4-check-N.xml     | 5-act-N.xml     | PR review         |
-| 6 | Release | 5-act-N.xml       | 6-release-N.xml | No                |
-
-## Installation
+## Quickstart
 
 ```bash
-# Clone LAISI and link globally
-git clone <laisi-repo> ~/projects/laisi
-cd ~/projects/laisi
-npm install
-npm run build
-npm link
+npm install -g laisi
+mkdir my-blog && cd my-blog
+laisi init --workflow blog-post
+laisi run --all
+cat .laisi/review.xml
 ```
 
-## Usage
+This runs the built-in `blog-post` workflow: three steps (outline, draft,
+review), each producing validated XML. The whole pipeline takes about a minute.
 
-```bash
-# In any project repo:
-cd ~/projects/my-project
-laisi init                   # Create .issues/ directory
-laisi                        # Run one step
-laisi --dry-run              # Show what would run
-laisi status                 # Show status of all tracked issues
+## How It Works
+
+- **Workflows are YAML.** Each workflow is a directory with a `workflow.yml`,
+  XSD schemas, and prompt templates. No code to write.
+- **Steps chain together.** A step declares a `predecessor` -- its output XML
+  becomes input context for the next step.
+- **Each step:** optional `pre_script` -> LLM call (prompt + predecessor XML)
+  -> validate output against XSD -> optional `post_script`.
+- **One step per run.** `laisi run` executes one step and exits.
+  `laisi run --all` runs all remaining steps, stopping on failure.
+- **Files are state.** Completed steps produce `<step-id>.xml` in `.laisi/`.
+  The CLI checks what exists and picks up where it left off.
+- **Failed steps** get a `.failed` marker. Delete it to retry.
+
+## Creating Your Own Workflow
+
+A workflow is a directory with a naming convention:
+
+```
+workflows/my-workflow/
+  workflow.yml        # Step definitions
+  research.xsd        # Schema for the "research" step
+  research.md         # Prompt for the "research" step
+  analysis.xsd        # Schema for the "analysis" step
+  analysis.md         # Prompt for the "analysis" step
 ```
 
-## Cron Setup (every 15 minutes)
+Each step needs a `<step-id>.xsd` (validation schema) and a `<step-id>.md`
+(prompt template). File names must match the step `id`.
 
-```bash
-*/15 * * * * cd /path/to/repo && laisi >> .issues/orchestrator.log 2>&1
+Here is a minimal `workflow.yml`:
+
+```yaml
+workflow: my-workflow
+description: "Analyze a topic"
+max_retries: 3
+
+steps:
+  - id: research
+    description: "Gather key facts and sources"
+
+  - id: analysis
+    description: "Synthesize findings into recommendations"
+    predecessor: research
 ```
+
+Steps without a `predecessor` run first. Steps with a `predecessor` receive
+that step's output XML as context in their prompt.
+
+Optional hooks:
+- `pre_script` -- shell command to run before the LLM call (e.g., fetch data)
+- `post_script` -- shell command to run after a valid output is written
+
+## CLI Reference
+
+| Command                  | Description                                  |
+|--------------------------|----------------------------------------------|
+| `laisi init`             | Scaffold `.laisi.yml` and `.laisi/` directory |
+| `laisi init --workflow <name>` | Copy a built-in workflow to get started |
+| `laisi run`              | Execute the next pending step, then exit     |
+| `laisi run --all`        | Run all remaining steps (stops on failure)   |
+| `laisi run --step <id>`  | Run a specific step                          |
+| `laisi status`           | Show workflow progress                       |
 
 ## Requirements
 
 - Node.js 20+
-- `gh` (GitHub CLI) – authenticated
-- `claude` (Claude Code CLI)
-- `jq` (for JSON processing)
+- [`claude`](https://docs.anthropic.com/en/docs/claude-code) CLI (Claude Code)
+
+## License
+
+MIT
