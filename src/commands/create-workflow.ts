@@ -39,14 +39,26 @@ export function createWorkflow(opts: CreateWorkflowOptions): void {
     process.exit(1);
   }
 
-  const spec = parseWorkflowSpec(specXml);
+  let spec;
+  try {
+    spec = parseWorkflowSpec(specXml);
+  } catch (e) {
+    console.error(`Invalid spec: ${(e as Error).message}`);
+    process.exit(1);
+  }
 
   const targetDir = join(process.cwd(), "workflows", spec.name);
-  const created = generateWorkflowFiles({
-    spec,
-    targetDir,
-    force: opts.force,
-  });
+  let created;
+  try {
+    created = generateWorkflowFiles({
+      spec,
+      targetDir,
+      force: opts.force,
+    });
+  } catch (e) {
+    console.error((e as Error).message);
+    process.exit(1);
+  }
 
   console.log(`Workflow "${spec.name}" created with ${spec.steps.length} step(s):\n`);
   for (const file of created) {
@@ -70,6 +82,10 @@ Flags:
   --force         Overwrite existing workflow directory
   --schema        Print workflow-spec.xsd to stdout
   --example       Print a complete example spec XML to stdout
+
+The spec XML defines the workflow name, description, max_retries, and steps.
+Each step includes an id, description, prompt (becomes <id>.md), and schema
+(becomes <id>.xsd). Optional: predecessor, pre_script, post_script.
 
 Quick start for agents:
   laisi create-workflow --example > my-spec.xml   # Get a template
