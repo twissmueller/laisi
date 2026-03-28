@@ -125,11 +125,11 @@ Provide the reviewed version with improvements applied.</prompt>
 
 | Element | Required | Description |
 |---------|----------|-------------|
-| `name` | Yes | Workflow name, used as directory name |
+| `name` | Yes | Workflow name, used as directory name. Must match `[a-z0-9][a-z0-9-]*`. Maps to `workflow` field in generated `workflow.yml` |
 | `description` | Yes | Human-readable description |
 | `max_retries` | Yes | Max retry attempts per step on validation failure |
 | `steps/step` | Yes (1+) | One or more step definitions |
-| `step/id` | Yes | Step identifier, used for filenames |
+| `step/id` | Yes | Step identifier, used for filenames. Must match `[a-z0-9][a-z0-9_]*` (lowercase alphanumeric with underscores) |
 | `step/description` | Yes | Human-readable step description |
 | `step/predecessor` | No | ID of the step whose output to pass as context |
 | `step/pre_script` | No | Shell command to run before the LLM call |
@@ -141,7 +141,8 @@ Provide the reviewed version with improvements applied.</prompt>
 
 - Each `step/id` must be unique within the spec.
 - Each `predecessor` must reference an existing `step/id` in the same spec.
-- Each `step/schema` must be well-formed XML (valid XSD).
+- Each `step/schema` must be parseable XML with an `xs:schema` root element containing at least one `xs:element`.
+- `name` must match `[a-z0-9][a-z0-9-]*` (lowercase alphanumeric with hyphens).
 
 ---
 
@@ -169,19 +170,41 @@ laisi create-workflow --example           Dump a complete example spec to stdout
 ### Behavior (`--from`)
 
 1. Read the spec XML file.
-2. Validate against `workflow-spec.xsd` (reusing existing `schema.ts` infrastructure).
-3. Run additional validation: unique step IDs, valid predecessor references, well-formed XSD in each schema element.
-4. Check that `workflows/<name>/` does not exist (abort unless `--force`).
+2. Parse XML and structurally validate required elements (no XSD validation engine exists in the codebase; validation is programmatic checks on the parsed tree, similar to how `loadWorkflow()` validates in `workflow.ts`).
+3. Run additional validation: unique step IDs, valid predecessor references, name matches `[a-z0-9][a-z0-9-]*`, each step schema is parseable XML with `xs:schema` root.
+4. Check that `workflows/<name>/` (relative to CWD) does not exist (abort unless `--force`).
 5. Create `workflows/<name>/` and generate:
-   - `workflow.yml` — workflow metadata + step definitions (id, description, predecessor, pre_script, post_script)
+   - `workflow.yml` — maps spec fields to workflow format: `workflow: <name>`, `description: <description>`, `max_retries: <max_retries>`, `steps:` array with id, description, predecessor, pre_script, post_script
    - `<id>.md` — prompt content for each step
    - `<id>.xsd` — schema content for each step (extracted from CDATA)
 6. Print summary of created files.
 
+#### Generated `workflow.yml` example
+
+From the blog-post spec above, the generated file would be:
+
+```yaml
+workflow: blog-post
+description: "Generate a blog post from a topic"
+max_retries: 3
+
+steps:
+  - id: outline
+    description: "Create a structured outline for the blog post"
+
+  - id: draft
+    description: "Write the full blog post based on the outline"
+    predecessor: outline
+
+  - id: review
+    description: "Review the draft for clarity, structure, and quality"
+    predecessor: draft
+```
+
 ### Error handling
 
 - Spec is not valid XML: print parse error, exit 1.
-- Spec fails XSD validation: print validation errors, exit 1.
+- Spec fails structural validation (missing required elements): print validation errors, exit 1.
 - Duplicate step IDs or invalid predecessor: print specific error, exit 1.
 - Target directory exists without `--force`: print message, exit 1.
 
@@ -226,8 +249,8 @@ The skill is conversational and creative — it helps the user *think through* t
 
 ### New files
 
-- `workflows/workflow-spec.xsd` — The spec schema (ships with LAISI)
-- `workflows/workflow-spec-example.xml` — The example spec (used by `--example`)
+- `workflows/workflow-spec.xsd` — The spec schema (ships with LAISI, resolved at runtime via `LAISI_HOME/workflows/workflow-spec.xsd`)
+- `workflows/workflow-spec-example.xml` — The example spec (resolved via `LAISI_HOME/workflows/workflow-spec-example.xml`, used by `--example`)
 - `src/commands/create-workflow.ts` — The CLI command implementation
 - Skill file (location TBD by skill authoring conventions)
 
