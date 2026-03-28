@@ -153,4 +153,34 @@ describe("parseWorkflowSpec", () => {
 </workflow-spec>`;
     expect(() => parseWorkflowSpec(xml)).toThrow(/step/i);
   });
+
+  it("parses a multi-step spec with predecessors", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<workflow-spec>
+  <name>test</name>
+  <description>Test</description>
+  <max_retries>3</max_retries>
+  <steps>
+    <step>
+      <id>step1</id>
+      <description>First step</description>
+      <prompt>Do first thing</prompt>
+      <schema><![CDATA[<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"><xs:element name="root"><xs:complexType><xs:sequence><xs:element name="field" type="xs:string"/></xs:sequence></xs:complexType></xs:element></xs:schema>]]></schema>
+    </step>
+    <step>
+      <id>step2</id>
+      <description>Second step</description>
+      <predecessor>step1</predecessor>
+      <prompt>Do second thing</prompt>
+      <schema><![CDATA[<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"><xs:element name="out"><xs:complexType><xs:sequence><xs:element name="result" type="xs:string"/></xs:sequence></xs:complexType></xs:element></xs:schema>]]></schema>
+    </step>
+  </steps>
+</workflow-spec>`;
+    const spec = parseWorkflowSpec(xml);
+    expect(spec.steps).toHaveLength(2);
+    expect(spec.steps[0].id).toBe("step1");
+    expect(spec.steps[0].predecessor).toBeUndefined();
+    expect(spec.steps[1].id).toBe("step2");
+    expect(spec.steps[1].predecessor).toBe("step1");
+  });
 });

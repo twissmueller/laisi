@@ -54,6 +54,7 @@ export function parseWorkflowSpec(xml: string): WorkflowSpec {
 
   validateRequiredField(root, "name");
   validateRequiredField(root, "description");
+  validateRequiredField(root, "max_retries");
   validateRequiredField(root, "steps");
 
   const name = String(root.name);
@@ -64,7 +65,11 @@ export function parseWorkflowSpec(xml: string): WorkflowSpec {
   }
 
   const description = String(root.description);
-  const max_retries: number = typeof root.max_retries === "number" ? root.max_retries : 3;
+  const max_retries = typeof root.max_retries === "number" ? root.max_retries : parseInt(String(root.max_retries), 10);
+
+  if (!Number.isInteger(max_retries) || max_retries < 1) {
+    throw new Error("Invalid max_retries: must be a positive integer");
+  }
 
   // steps element may parse as an object with a "step" array, or as empty
   const stepsContainer = root.steps as Record<string, unknown> | null | undefined;
