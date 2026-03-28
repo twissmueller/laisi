@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="workflow-spec">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="name" type="xs:string"/>
+        <xs:element name="description" type="xs:string"/>
+        <xs:element name="max_retries" type="xs:positiveInteger"/>
+        <xs:element name="steps">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="step" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="id" type="xs:string"/>
+                    <xs:element name="description" type="xs:string"/>
+                    <xs:element name="predecessor" type="xs:string" minOccurs="0"/>
+                    <xs:element name="pre_script" type="xs:string" minOccurs="0"/>
+                    <xs:element name="post_script" type="xs:string" minOccurs="0"/>
+                    <xs:element name="prompt" type="xs:string"/>
+                    <xs:element name="schema" type="xs:string"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>
