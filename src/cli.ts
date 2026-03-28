@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { run } from "./commands/run.js";
 import { status } from "./commands/status.js";
 import { init } from "./commands/init.js";
+import { createWorkflow } from "./commands/create-workflow.js";
 
 // ── LAISI's own directory (for built-in workflow templates) ──
 const __filename = fileURLToPath(import.meta.url);
@@ -52,6 +53,17 @@ switch (command) {
     });
     break;
 
+  case "create-workflow":
+    createWorkflow({
+      from: getFlagValue("--from"),
+      force: hasFlag("--force"),
+      showSchema: hasFlag("--schema"),
+      showExample: hasFlag("--example"),
+      showHelp: hasFlag("--help"),
+      laisiHome: LAISI_HOME,
+    });
+    break;
+
   case "help":
   case "--help":
   case "-h":
@@ -80,6 +92,7 @@ Usage:
   laisi status                   Show workflow progress
   laisi init                     Scaffold .laisi.yml + .laisi/
   laisi init --workflow <name>   Initialize with a built-in workflow
+  laisi create-workflow --from <f>   Create workflow from XML spec
   laisi help                     Show this help
 `);
 }
