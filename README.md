@@ -4,10 +4,21 @@ A workflow harness for AI-generated content. Define steps in YAML, validate
 every output against XSD schemas, and let the CLI handle retries. The LLM
 produces content; LAISI makes sure it's correct.
 
+## Installation
+
+```bash
+git clone https://github.com/twissmueller/laisi.git
+cd laisi
+npm install
+npm run build
+npm link
+```
+
+This makes the `laisi` command available globally.
+
 ## Quickstart
 
 ```bash
-npm install -g laisi
 mkdir my-blog && cd my-blog
 laisi init --workflow blog-post
 laisi run --all
