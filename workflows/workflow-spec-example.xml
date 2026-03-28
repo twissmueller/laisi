@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<workflow-spec>
+  <name>blog-post</name>
+  <description>Generate a blog post from a topic</description>
+  <max_retries>3</max_retries>
+  <steps>
+    <step>
+      <id>outline</id>
+      <description>Create a structured outline for the blog post</description>
+      <prompt>You are a blog post planner. Create a structured outline for a blog post.
+
+Topic: AI-Assisted Development Workflows
+
+Create an outline that covers:
+- What AI-assisted workflows are and why they matter
+- Key components of an effective AI workflow
+- Practical examples and patterns
+- Challenges and how to address them
+
+Target a technical audience familiar with software development but new to AI-assisted workflows.</prompt>
+      <schema><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="outline">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="title" type="xs:string"/>
+        <xs:element name="audience" type="xs:string"/>
+        <xs:element name="sections">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="section" maxOccurs="unbounded">
+                <xs:complexType>
+                  <xs:sequence>
+                    <xs:element name="heading" type="xs:string"/>
+                    <xs:element name="key_points" type="xs:string"/>
+                  </xs:sequence>
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>]]></schema>
+    </step>
+    <step>
+      <id>draft</id>
+      <description>Write the full blog post based on the outline</description>
+      <predecessor>outline</predecessor>
+      <prompt>You are a technical writer. Write a complete blog post based on the provided outline.
+
+Write in a clear, engaging style suitable for a technical blog. Use concrete examples and practical advice. Aim for 1500-2000 words.</prompt>
+      <schema><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="draft">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="title" type="xs:string"/>
+        <xs:element name="body" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>]]></schema>
+    </step>
+    <step>
+      <id>review</id>
+      <description>Review the draft for clarity, structure, and quality</description>
+      <predecessor>draft</predecessor>
+      <prompt>You are an editor. Review the blog post draft for:
+- Clarity and readability
+- Logical structure and flow
+- Technical accuracy
+- Grammar and style
+
+Provide the reviewed version with improvements applied.</prompt>
+      <schema><![CDATA[<?xml version="1.0" encoding="UTF-8"?>
+<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="review">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="title" type="xs:string"/>
+        <xs:element name="body" type="xs:string"/>
+        <xs:element name="changes_made" type="xs:string"/>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>]]></schema>
+    </step>
+  </steps>
+</workflow-spec>
