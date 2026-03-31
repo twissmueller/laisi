@@ -49,6 +49,7 @@ export function generateWorkflowFiles(opts: GenerateOptions): string[] {
       if (s.predecessor) step.predecessor = s.predecessor;
       if (s.pre_script) step.pre_script = s.pre_script;
       if (s.post_script) step.post_script = s.post_script;
+      if (s.script) step.script = s.script;
       return step;
     }),
   };
@@ -59,13 +60,17 @@ export function generateWorkflowFiles(opts: GenerateOptions): string[] {
 
   // Generate per-step files
   for (const step of spec.steps) {
-    const mdPath = join(targetDir, `${step.id}.md`);
-    writeFileSync(mdPath, step.prompt);
-    created.push(mdPath);
+    if (step.prompt) {
+      const mdPath = join(targetDir, `${step.id}.md`);
+      writeFileSync(mdPath, step.prompt);
+      created.push(mdPath);
+    }
 
-    const xsdPath = join(targetDir, `${step.id}.xsd`);
-    writeFileSync(xsdPath, step.schema);
-    created.push(xsdPath);
+    if (step.schema) {
+      const xsdPath = join(targetDir, `${step.id}.xsd`);
+      writeFileSync(xsdPath, step.schema);
+      created.push(xsdPath);
+    }
   }
 
   return created;

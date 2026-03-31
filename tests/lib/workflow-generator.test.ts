@@ -108,4 +108,68 @@ describe("generateWorkflowFiles", () => {
     expect(wf.steps[1].id).toBe("step2");
     expect(wf.steps[1].predecessor).toBe("step1");
   });
+
+  it("generates script step in workflow.yml without .md/.xsd files", () => {
+    const spec: WorkflowSpec = {
+      name: "test-mixed",
+      description: "Mixed workflow",
+      max_retries: 3,
+      steps: [
+        {
+          id: "step1",
+          description: "LLM step",
+          prompt: "Do something",
+          schema: '<?xml version="1.0"?>\n<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"><xs:element name="out" type="xs:string"/></xs:schema>',
+        },
+        {
+          id: "deploy",
+          description: "Deploy",
+          predecessor: "step1",
+          script: "./deploy.sh",
+        },
+      ],
+    };
+    const targetDir = join(tmpDir, "test-mixed");
+    const created = generateWorkflowFiles({ spec, targetDir });
+
+    // LLM step has .md and .xsd
+    expect(created).toContain(join(targetDir, "step1.md"));
+    expect(created).toContain(join(targetDir, "step1.xsd"));
+
+    // Script step has no .md or .xsd
+    expect(created).not.toContain(join(targetDir, "deploy.md"));
+    expect(created).not.toContain(join(targetDir, "deploy.xsd"));
+
+    // workflow.yml contains script field
+    const yml = readFileSync(join(targetDir, "workflow.yml"), "utf-8");
+    expect(yml).toContain("script: ./deploy.sh");
+  });
+
+  it("generated mixed workflow is loadable by loadWorkflow()", () => {
+    const spec: WorkflowSpec = {
+      name: "test-mixed2",
+      description: "Mixed",
+      max_retries: 3,
+      steps: [
+        {
+          id: "analyze",
+          description: "Analyze",
+          prompt: "Analyze this",
+          schema: '<?xml version="1.0"?>\n<xs:schema xmlns:xs="http://www.w3.org/2001/XMLSchema"><xs:element name="out" type="xs:string"/></xs:schema>',
+        },
+        {
+          id: "build",
+          description: "Build",
+          predecessor: "analyze",
+          script: "./build.sh",
+        },
+      ],
+    };
+    const targetDir = join(tmpDir, "test-mixed2");
+    generateWorkflowFiles({ spec, targetDir });
+
+    const wf = loadWorkflow(targetDir);
+    expect(wf.steps[0].script).toBeUndefined();
+    expect(wf.steps[1].script).toBe("./build.sh");
+  });
 });
