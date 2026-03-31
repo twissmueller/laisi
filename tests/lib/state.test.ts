@@ -4,6 +4,16 @@ import { join } from "node:path";
 import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import type { WorkflowDefinition } from "../../src/lib/workflow.js";
 
+const mixedWorkflow: WorkflowDefinition = {
+  workflow: "test",
+  description: "test",
+  max_retries: 3,
+  steps: [
+    { id: "outline", description: "Create outline" },
+    { id: "deploy", description: "Deploy", script: "./deploy.sh", predecessor: "outline" },
+  ],
+};
+
 const workflow: WorkflowDefinition = {
   workflow: "test",
   description: "test",
@@ -62,5 +72,40 @@ describe("scanWorkflow", () => {
     const states = scanWorkflow(join(tmpDir, "nonexistent"), workflow);
     expect(states).toHaveLength(3);
     expect(states[0].status).toBe("next");
+  });
+});
+
+describe("scanWorkflow with script steps", () => {
+  const tmpDir = join(import.meta.dirname, "../../.test-laisi-state");
+
+  beforeEach(() => {
+    mkdirSync(tmpDir, { recursive: true });
+  });
+
+  afterEach(() => {
+    rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it("detects .done file as completed for script step", () => {
+    writeFileSync(join(tmpDir, "outline.xml"), "<outline/>");
+    writeFileSync(join(tmpDir, "deploy.done"), "");
+    const states = scanWorkflow(tmpDir, mixedWorkflow);
+    expect(states[0].status).toBe("done");
+    expect(states[1].status).toBe("done");
+  });
+
+  it("detects .failed file for script step", () => {
+    writeFileSync(join(tmpDir, "outline.xml"), "<outline/>");
+    writeFileSync(join(tmpDir, "deploy.failed"), "script error");
+    const states = scanWorkflow(tmpDir, mixedWorkflow);
+    expect(states[0].status).toBe("done");
+    expect(states[1].status).toBe("failed");
+  });
+
+  it("shows script step as next when predecessor is done", () => {
+    writeFileSync(join(tmpDir, "outline.xml"), "<outline/>");
+    const states = scanWorkflow(tmpDir, mixedWorkflow);
+    expect(states[0].status).toBe("done");
+    expect(states[1].status).toBe("next");
   });
 });

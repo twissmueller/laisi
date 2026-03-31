@@ -30,8 +30,9 @@ export function scanWorkflow(
   const states: StepState[] = [];
 
   for (const step of workflow.steps) {
-    const outputFile = `${step.id}.xml`;
-    const failedFile = `${step.id}.xml.failed`;
+    const isScript = !!step.script;
+    const outputFile = isScript ? `${step.id}.done` : `${step.id}.xml`;
+    const failedFile = isScript ? `${step.id}.failed` : `${step.id}.xml.failed`;
 
     if (files.has(outputFile)) {
       states.push({ step, status: "done" });
