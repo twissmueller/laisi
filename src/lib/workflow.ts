@@ -16,6 +16,7 @@ export interface StepDefinition {
   predecessor?: string;
   pre_script?: string;
   post_script?: string;
+  script?: string;
 }
 
 export interface WorkflowDefinition {

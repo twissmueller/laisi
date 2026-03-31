@@ -101,4 +101,31 @@ steps:
     expect(wf.steps[0].pre_script).toBe("echo hello");
     expect(wf.steps[0].post_script).toBe("echo done");
   });
+
+  it("parses optional script field", () => {
+    writeFileSync(join(tmpDir, "workflow.yml"), `
+workflow: test
+description: "test"
+max_retries: 3
+steps:
+  - id: build
+    description: "Build project"
+    script: "./scripts/build.sh"
+`);
+    const wf = loadWorkflow(tmpDir);
+    expect(wf.steps[0].script).toBe("./scripts/build.sh");
+  });
+
+  it("leaves script undefined when not present", () => {
+    writeFileSync(join(tmpDir, "workflow.yml"), `
+workflow: test
+description: "test"
+max_retries: 3
+steps:
+  - id: outline
+    description: "Create outline"
+`);
+    const wf = loadWorkflow(tmpDir);
+    expect(wf.steps[0].script).toBeUndefined();
+  });
 });
