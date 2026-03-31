@@ -121,6 +121,51 @@ export async function runStep(
   const promptPath = join(workflowDir, `${step.id}.md`);
   const outputPath = join(laisiDir, `${step.id}.xml`);
 
+  // ─── Script-only step: skip LLM, run script directly ─────
+  if (step.script) {
+    const donePath = join(laisiDir, `${step.id}.done`);
+    const failedPath = join(laisiDir, `${step.id}.failed`);
+
+    // Run pre-script
+    if (step.pre_script) {
+      log(`  Pre-script: ${step.pre_script}`);
+      try {
+        executeShellCommand(step.pre_script, step.id, repoRoot);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        log(`  Pre-script failed: ${message}`);
+        return { success: false, error: `Pre-script failed: ${message}` };
+      }
+    }
+
+    // Run main script
+    log(`  Script: ${step.script}`);
+    try {
+      executeShellCommand(step.script, step.id, repoRoot);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      writeFileSync(failedPath, message);
+      log(`  Script failed: ${message}`);
+      return { success: false, error: message };
+    }
+
+    // Write .done marker
+    writeFileSync(donePath, "");
+    log(`  Done: ${donePath}`);
+
+    // Run post-script (non-fatal)
+    if (step.post_script) {
+      log(`  Post-script: ${step.post_script}`);
+      try {
+        executeShellCommand(step.post_script, step.id, repoRoot);
+      } catch (err) {
+        log(`  Post-script failed: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+
+    return { success: true, outputPath: donePath };
+  }
+
   // Load predecessor XML if applicable
   let predecessorXml: string | undefined;
   if (step.predecessor) {
