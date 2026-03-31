@@ -37,7 +37,7 @@ A step with `script` is a script-only step. A step without `script` is an LLM st
 ### Validation rules
 
 - A step must have either `script` OR a corresponding `.md`+`.xsd` pair. Never both, never neither.
-- `loadWorkflow()` does not enforce `.md`/`.xsd` existence (that's a runtime concern in `runStep()`), so the only structural validation is: `script` and `prompt`/`schema` are mutually exclusive in the spec format.
+- The `script` vs `prompt`+`schema` mutual exclusion is enforced in `parseWorkflowSpec` (the `create-workflow` path). `loadWorkflow()` does not validate this — it accepts any fields present in the YAML. A user who hand-writes a `workflow.yml` with an invalid combination will hit a runtime error in `runStep()`, not a load-time error.
 - `pre_script` and `post_script` remain available for both step types.
 
 ---
@@ -56,10 +56,14 @@ A step with `script` is a script-only step. A step without `script` is an LLM st
 
 1. Run `pre_script` (optional)
 2. Run `script`
-3. Run `post_script` (optional)
-4. Write `.laisi/<id>.done` marker (empty file)
+3. Write `.laisi/<id>.done` marker (empty file)
+4. Run `post_script` (optional)
 
-On `script` failure: write `.laisi/<id>.failed` marker (with error message), return failure. No retries — scripts are deterministic; if they fail, human intervention is needed.
+**Failure semantics:**
+
+- `pre_script` failure: return `{ success: false }` with no `.failed` marker (step remains retry-able). Consistent with LLM step behavior.
+- `script` failure: write `.laisi/<id>.failed` marker (with error message), return failure. No retries — scripts are deterministic; if they fail, human intervention is needed.
+- `post_script` failure: non-fatal, `.done` is already written, step is considered complete. Consistent with LLM step behavior where `post_script` failure does not revoke the output.
 
 ---
 
@@ -122,6 +126,8 @@ Each step must have exactly one of:
 
 Throw if a step has both `script` and `prompt`/`schema`, or has neither.
 
+Note: `validateStepSchema` (which checks embedded XSD validity) must be skipped entirely for script-only steps, not called with an empty string.
+
 ---
 
 ## 5. Changes to `runStep()` in `run-phase.ts`
@@ -130,10 +136,11 @@ At the top of `runStep()`, check if `step.script` is present:
 
 ```
 if step.script:
-  run pre_script (if configured)
+  run pre_script (if configured) — on failure: return { success: false }, no marker
   run script (using existing executeShellCommand)
-  run post_script (if configured)
+    — on failure: write .laisi/<id>.failed, return { success: false }
   write .laisi/<id>.done
+  run post_script (if configured) — on failure: log warning, non-fatal
   return success
 
 else:
@@ -141,8 +148,6 @@ else:
 ```
 
 The script runs with the same environment as `pre_script`/`post_script`: `LAISI_STEP_ID` and `LAISI_WORKING_DIR` are set, cwd is `repoRoot`, 5-minute timeout.
-
-On script failure: write `.laisi/<id>.failed` with error message, return `{ success: false, error }`.
 
 ---
 
@@ -157,6 +162,8 @@ Add optional `script` element to step, make `prompt` and `schema` optional:
 ```
 
 `prompt` and `schema` change from required to `minOccurs="0"`.
+
+**Note:** XSD `xs:sequence` with `minOccurs="0"` cannot express the mutual exclusion constraint (a step could have all three elements and still pass XSD validation). The either-or rule is enforced entirely by `parseWorkflowSpec` in programmatic validation, not by the XSD.
 
 ### Example spec with script-only step
 
@@ -188,6 +195,7 @@ Add optional `script` element to step, make `prompt` and `schema` optional:
 | `src/lib/workflow-spec.ts` | Add `script?` to `WorkflowSpecStep`, update validation (either/or) |
 | `src/lib/workflow-generator.ts` | Skip `.md`/`.xsd` generation for script steps, add `script` to yml |
 | `workflows/workflow-spec.xsd` | Make `prompt`/`schema` optional, add `script` |
+| `src/commands/run.ts` | Make failure message step-type-aware (currently hardcodes `.xml.failed`) |
 | `src/commands/create-workflow.ts` | No changes needed |
 | `src/cli.ts` | No changes needed |
 
