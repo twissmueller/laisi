@@ -21,8 +21,9 @@ export interface WorkflowSpecStep {
   predecessor?: string;
   pre_script?: string;
   post_script?: string;
-  prompt: string;
-  schema: string;
+  prompt?: string;
+  schema?: string;
+  script?: string;
 }
 
 // ─── Validation helpers ────────────────────────────────────
@@ -112,8 +113,7 @@ function validateRequiredField(root: Record<string, unknown>, field: string): vo
 }
 
 function parseStep(step: Record<string, unknown>, ids: Set<string>): WorkflowSpecStep {
-  // Validate required fields
-  for (const field of ["id", "description", "prompt", "schema"] as const) {
+  for (const field of ["id", "description"] as const) {
     const val = step[field];
     if (val === undefined || val === null || val === "") {
       throw new Error(`Invalid step: missing required element <${field}>`);
@@ -139,18 +139,40 @@ function parseStep(step: Record<string, unknown>, ids: Set<string>): WorkflowSpe
     );
   }
 
-  const schema = String(step.schema);
-  validateStepSchema(schema, id);
+  const hasScript = step.script != null && step.script !== "";
+  const hasPrompt = step.prompt != null && step.prompt !== "";
+  const hasSchema = step.schema != null && step.schema !== "";
 
-  return {
+  if (hasScript && (hasPrompt || hasSchema)) {
+    throw new Error(
+      `Step "${id}" has both "script" and "prompt"/"schema" — a step must have either script OR prompt+schema, not both`,
+    );
+  }
+
+  if (!hasScript && (!hasPrompt || !hasSchema)) {
+    throw new Error(
+      `Step "${id}" must have either "script" (script-only step) or both "prompt" and "schema" (LLM step)`,
+    );
+  }
+
+  const result: WorkflowSpecStep = {
     id,
     description: String(step.description),
-    prompt: String(step.prompt),
-    schema,
     ...(predecessor !== undefined ? { predecessor } : {}),
     ...(step.pre_script != null ? { pre_script: String(step.pre_script) } : {}),
     ...(step.post_script != null ? { post_script: String(step.post_script) } : {}),
   };
+
+  if (hasScript) {
+    result.script = String(step.script);
+  } else {
+    const schema = String(step.schema);
+    validateStepSchema(schema, id);
+    result.prompt = String(step.prompt);
+    result.schema = schema;
+  }
+
+  return result;
 }
 
 function validateStepSchema(schema: string, stepId: string): void {

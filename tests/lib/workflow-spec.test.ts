@@ -154,6 +154,113 @@ describe("parseWorkflowSpec", () => {
     expect(() => parseWorkflowSpec(xml)).toThrow(/step/i);
   });
 
+  it("parses a script-only step", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<workflow-spec>
+  <name>test-workflow</name>
+  <description>Test</description>
+  <max_retries>3</max_retries>
+  <steps>
+    <step>
+      <id>deploy</id>
+      <description>Deploy the artifact</description>
+      <script>./deploy.sh</script>
+    </step>
+  </steps>
+</workflow-spec>`;
+    const spec = parseWorkflowSpec(xml);
+    expect(spec.steps).toHaveLength(1);
+    expect(spec.steps[0].script).toBe("./deploy.sh");
+    expect(spec.steps[0].prompt).toBeUndefined();
+    expect(spec.steps[0].schema).toBeUndefined();
+  });
+
+  it("parses a mixed workflow with LLM and script steps", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<workflow-spec>
+  <name>test-workflow</name>
+  <description>Test</description>
+  <max_retries>3</max_retries>
+  <steps>
+    <step>
+      <id>generate</id>
+      <description>Generate content</description>
+      <prompt>Do something</prompt>
+      <schema><![CDATA[${validSchema}]]></schema>
+    </step>
+    <step>
+      <id>deploy</id>
+      <description>Deploy the artifact</description>
+      <predecessor>generate</predecessor>
+      <script>./deploy.sh</script>
+    </step>
+  </steps>
+</workflow-spec>`;
+    const spec = parseWorkflowSpec(xml);
+    expect(spec.steps).toHaveLength(2);
+    expect(spec.steps[0].id).toBe("generate");
+    expect(spec.steps[0].prompt).toBe("Do something");
+    expect(spec.steps[0].schema).toContain("xs:schema");
+    expect(spec.steps[0].script).toBeUndefined();
+    expect(spec.steps[1].id).toBe("deploy");
+    expect(spec.steps[1].predecessor).toBe("generate");
+    expect(spec.steps[1].script).toBe("./deploy.sh");
+    expect(spec.steps[1].prompt).toBeUndefined();
+    expect(spec.steps[1].schema).toBeUndefined();
+  });
+
+  it("throws when step has both script and prompt", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<workflow-spec>
+  <name>test-workflow</name>
+  <description>Test</description>
+  <max_retries>3</max_retries>
+  <steps>
+    <step>
+      <id>step1</id>
+      <description>Ambiguous step</description>
+      <script>./run.sh</script>
+      <prompt>Do something</prompt>
+      <schema><![CDATA[${validSchema}]]></schema>
+    </step>
+  </steps>
+</workflow-spec>`;
+    expect(() => parseWorkflowSpec(xml)).toThrow(/both.*script.*prompt|script.*prompt.*schema/i);
+  });
+
+  it("throws when step has prompt but no schema and no script", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<workflow-spec>
+  <name>test-workflow</name>
+  <description>Test</description>
+  <max_retries>3</max_retries>
+  <steps>
+    <step>
+      <id>step1</id>
+      <description>Incomplete LLM step</description>
+      <prompt>Do something</prompt>
+    </step>
+  </steps>
+</workflow-spec>`;
+    expect(() => parseWorkflowSpec(xml)).toThrow(/prompt.*schema|script.*prompt/i);
+  });
+
+  it("throws when step has neither script nor prompt+schema", () => {
+    const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<workflow-spec>
+  <name>test-workflow</name>
+  <description>Test</description>
+  <max_retries>3</max_retries>
+  <steps>
+    <step>
+      <id>step1</id>
+      <description>Empty step</description>
+    </step>
+  </steps>
+</workflow-spec>`;
+    expect(() => parseWorkflowSpec(xml)).toThrow(/script.*prompt.*schema|prompt.*schema/i);
+  });
+
   it("parses a multi-step spec with predecessors", () => {
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <workflow-spec>
