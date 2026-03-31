@@ -46,7 +46,10 @@ export async function run(opts: RunOptions): Promise<void> {
     const states = scanWorkflow(laisiDir, workflow);
     const failed = states.find((s) => s.status === "failed");
     if (failed) {
-      log(`Step "${failed.step.id}" has failed. Delete .laisi/${failed.step.id}.xml.failed to retry.`);
+      const failedFile = failed.step.script
+        ? `${failed.step.id}.failed`
+        : `${failed.step.id}.xml.failed`;
+      log(`Step "${failed.step.id}" has failed. Delete .laisi/${failedFile} to retry.`);
       return false;
     }
 
