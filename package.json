@@ -34,10 +34,10 @@
   "keywords": [
     "ai",
     "automation",
-    "github",
-    "issues",
+    "workflow",
     "claude",
-    "requirements"
+    "xsd",
+    "schema-validation"
   ],
   "license": "MIT"
 }
