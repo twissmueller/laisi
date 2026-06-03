@@ -96,6 +96,7 @@ function executeShellCommand(
         ...process.env,
         LAISI_STEP_ID: stepId,
         LAISI_WORKING_DIR: workingDir,
+        LAISI_OUTPUT_DIR: join(workingDir, ".laisi"),
       },
     });
   } catch (err: unknown) {
@@ -210,7 +211,7 @@ export async function runStep(
         );
 
     try {
-      const raw = callClaude(prompt);
+      const raw = callClaude(prompt, repoRoot, step.allowed_tools);
 
       let xml: string;
       try {

@@ -17,6 +17,7 @@ export interface StepDefinition {
   pre_script?: string;
   post_script?: string;
   script?: string;
+  allowed_tools?: string[];
 }
 
 export interface WorkflowDefinition {
