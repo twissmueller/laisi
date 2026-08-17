@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { parseWorkflowSpec } from "../lib/workflow-spec.js";
 import { generateWorkflowFiles } from "../lib/workflow-generator.js";
+import { workflowsRoot } from "../lib/config.js";
 
 export interface CreateWorkflowOptions {
   from?: string;
@@ -47,7 +48,7 @@ export function createWorkflow(opts: CreateWorkflowOptions): void {
     process.exit(1);
   }
 
-  const targetDir = join(process.cwd(), "workflows", spec.name);
+  const targetDir = join(workflowsRoot(process.cwd()), spec.name);
   let created;
   try {
     created = generateWorkflowFiles({

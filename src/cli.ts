@@ -10,6 +10,7 @@ import { fileURLToPath } from "node:url";
 import { run } from "./commands/run.js";
 import { status } from "./commands/status.js";
 import { init } from "./commands/init.js";
+import { abort } from "./commands/abort.js";
 import { createWorkflow } from "./commands/create-workflow.js";
 
 // ── LAISI's own directory (for built-in workflow templates) ──
@@ -34,16 +35,31 @@ function getFlagValue(flag: string): string | undefined {
   return undefined;
 }
 
+try {
+  await dispatch();
+} catch (err) {
+  // Configuration and workflow problems are for the user to fix, not stack
+  // traces to read.
+  console.error(err instanceof Error ? err.message : String(err));
+  process.exit(1);
+}
+
+async function dispatch(): Promise<void> {
 switch (command) {
   case "run":
     await run({
       all: hasFlag("--all"),
       stepId: getFlagValue("--step"),
+      retry: hasFlag("--retry"),
     });
     break;
 
+  case "abort":
+    abort({ reason: getFlagValue("--reason") });
+    break;
+
   case "status":
-    status();
+    status({ runs: hasFlag("--runs") });
     break;
 
   case "init":
@@ -80,20 +96,28 @@ switch (command) {
     printHelp();
     process.exit(1);
 }
+}
 
 function printHelp(): void {
   console.log(`
 LAISI — Let AI Supervise Itself
 
 Usage:
-  laisi                          Run the next workflow step
-  laisi run --all                Run all remaining steps
+  laisi                          Run the next step of the open run
+  laisi run --all                Run all remaining steps of the open run
   laisi run --step <id>          Run a specific step
-  laisi status                   Show workflow progress
+  laisi run --retry              Retry the failed step of the open run
+  laisi abort [--reason <text>]  Give up on the open run, keeping its outputs
+  laisi status                   Show the open run's progress
+  laisi status --runs            Show the history of all runs
   laisi init                     Scaffold .laisi.yml + .laisi/
   laisi init --workflow <name>   Initialize with a built-in workflow
   laisi create-workflow --from <f>   Create workflow from XML spec
   laisi help                     Show this help
+
+Each traversal of the workflow is a run with its own directory under
+.laisi/runs/<counter>-<timestamp>/. Runs are never overwritten: when one
+completes or is aborted, the next 'laisi run' starts a fresh one.
 `);
 }
 

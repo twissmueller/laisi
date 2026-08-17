@@ -85,6 +85,7 @@ function executeShellCommand(
   command: string,
   stepId: string,
   workingDir: string,
+  outputDir: string,
 ): void {
   try {
     execSync(command, {
@@ -96,7 +97,7 @@ function executeShellCommand(
         ...process.env,
         LAISI_STEP_ID: stepId,
         LAISI_WORKING_DIR: workingDir,
-        LAISI_OUTPUT_DIR: join(workingDir, ".laisi"),
+        LAISI_OUTPUT_DIR: outputDir,
       },
     });
   } catch (err: unknown) {
@@ -114,24 +115,24 @@ function executeShellCommand(
 export async function runStep(
   step: StepDefinition,
   workflowDir: string,
-  laisiDir: string,
+  runDir: string,
   maxRetries: number,
   repoRoot: string,
 ): Promise<StepResult> {
   const schemaPath = join(workflowDir, `${step.id}.xsd`);
   const promptPath = join(workflowDir, `${step.id}.md`);
-  const outputPath = join(laisiDir, `${step.id}.xml`);
+  const outputPath = join(runDir, `${step.id}.xml`);
 
   // ─── Script-only step: skip LLM, run script directly ─────
   if (step.script) {
-    const donePath = join(laisiDir, `${step.id}.done`);
-    const failedPath = join(laisiDir, `${step.id}.failed`);
+    const donePath = join(runDir, `${step.id}.done`);
+    const failedPath = join(runDir, `${step.id}.failed`);
 
     // Run pre-script
     if (step.pre_script) {
       log(`  Pre-script: ${step.pre_script}`);
       try {
-        executeShellCommand(step.pre_script, step.id, repoRoot);
+        executeShellCommand(step.pre_script, step.id, repoRoot, runDir);
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         log(`  Pre-script failed: ${message}`);
@@ -142,7 +143,7 @@ export async function runStep(
     // Run main script
     log(`  Script: ${step.script}`);
     try {
-      executeShellCommand(step.script, step.id, repoRoot);
+      executeShellCommand(step.script, step.id, repoRoot, runDir);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       writeFileSync(failedPath, message);
@@ -158,7 +159,7 @@ export async function runStep(
     if (step.post_script) {
       log(`  Post-script: ${step.post_script}`);
       try {
-        executeShellCommand(step.post_script, step.id, repoRoot);
+        executeShellCommand(step.post_script, step.id, repoRoot, runDir);
       } catch (err) {
         log(`  Post-script failed: ${err instanceof Error ? err.message : String(err)}`);
       }
@@ -170,7 +171,7 @@ export async function runStep(
   // Load predecessor XML if applicable
   let predecessorXml: string | undefined;
   if (step.predecessor) {
-    const predecessorPath = join(laisiDir, `${step.predecessor}.xml`);
+    const predecessorPath = join(runDir, `${step.predecessor}.xml`);
     if (!existsSync(predecessorPath)) {
       return { success: false, error: `Predecessor output missing: ${predecessorPath}` };
     }
@@ -181,7 +182,7 @@ export async function runStep(
   if (step.pre_script) {
     log(`  Pre-script: ${step.pre_script}`);
     try {
-      executeShellCommand(step.pre_script, step.id, repoRoot);
+      executeShellCommand(step.pre_script, step.id, repoRoot, runDir);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       log(`  Pre-script failed: ${message}`);
@@ -257,7 +258,7 @@ export async function runStep(
       if (step.post_script) {
         log(`  Post-script: ${step.post_script}`);
         try {
-          executeShellCommand(step.post_script, step.id, repoRoot);
+          executeShellCommand(step.post_script, step.id, repoRoot, runDir);
         } catch (err) {
           log(`  Post-script failed: ${err instanceof Error ? err.message : String(err)}`);
           // Post-script failure is non-fatal — output is already written

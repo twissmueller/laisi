@@ -1,6 +1,8 @@
 node_modules/
 dist/
-.laisi/
+# Run artifacts are ignored; .laisi/workflows/ is source and stays tracked.
+.laisi/runs/
+.laisi/laisi.log
 *.raw
 .DS_Store
 .worktrees/

@@ -39,6 +39,7 @@ so every outcome of every run stays on disk and traceable.
     0001-20260817-143205/
       run.yml                   ← immutable facts about this run
       laisi.log                 ← per-run log
+      workflow-changes.log      ← only if the definition was repaired mid-run
       outline.xml
       draft.xml
       review.xml
@@ -114,9 +115,9 @@ marker freezes a finished run against later edits to the definition.
 2. If it carries `.complete` or `.aborted`, there is no open run.
 3. Otherwise it is the open run. Compare `run.yml`'s `workflow_hash` against a
    freshly computed hash of the current workflow directory. On mismatch, refuse
-   to continue and tell the user to either revert the definition or
-   `laisi abort` the run — rather than producing a run whose early steps used
-   one definition and whose later steps used another.
+   to continue — rather than producing a run whose early steps used one
+   definition and whose later steps used another. See "Repairing a definition
+   mid-run" for the one sanctioned exception.
 4. `laisi run` with no open run creates the next directory, writes `run.yml`,
    and proceeds.
 
@@ -139,6 +140,27 @@ does today, inside the run directory. The run stays **open**.
 
 `--retry` targets the failed step only. It is an error to use it when no step in
 the open run has failed.
+
+### Repairing a definition mid-run
+
+The commonest reason a step fails for good is a bad prompt or schema. Under a
+strict hash guard the only way to fix one would be `laisi abort` — discarding
+every upstream output, which is exactly what `--retry` exists to protect.
+
+So `--retry` is the sanctioned exception: it proceeds even when the workflow
+hash has changed, because it is an explicit human decision to accept the new
+definition and carry on. The change is recorded rather than waved through — an
+append-only `workflow-changes.log` in the run directory gains a line:
+
+```
+2026-08-18T09:41:02+02:00 step=draft 89a61582470c4f9f -> 72a56cf6db34bc76
+```
+
+`run.yml` stays immutable, so the fingerprint it holds is always the one the run
+started with, and the log says exactly where the definition changed and which
+step ran under the new one. Every other command still refuses on a hash
+mismatch. When no step has failed, `--retry` is not offered as a way out — the
+honest options are reverting the definition or aborting.
 
 ## CLI Surface
 

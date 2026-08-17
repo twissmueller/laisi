@@ -11,8 +11,14 @@
 - [x] GitHub integration: issue discovery, git commit/push
 - [x] Human gate system: `always`, `on_field`, `on_failure`
 - [x] `.gate` files for retry exhaustion
-- [x] Unit tests (24 tests, vitest)
+- [x] Unit tests (113 tests, vitest)
 - [x] Example workflow: `github-issue-intake`
+- [x] Run-scoped output directories: every traversal is a numbered, timestamped
+      run under `.laisi/runs/`, never overwritten
+- [x] `laisi abort` and `laisi run --retry`
+- [x] `laisi status --runs` run history
+- [x] Workflow fingerprint per run; mid-run definition changes are caught
+- [x] Workflow definitions moved into `.laisi/workflows/`
 
 ### Open: Create first complete workflow
 - [ ] Define `schemas/intent.xsd` — IntentSpec schema for the intent phase
@@ -54,7 +60,8 @@
 
 ### Observability
 - [ ] `laisi status` with workflow progress bars
-- [ ] Metrics: average time per phase
+- [ ] Metrics: average time per step, derived from run directories
+- [ ] `laisi diff <run-a> <run-b>` — compare two runs' outputs
 - [ ] Alerts: notification when issue is gated for > X hours
 
 ### Configuration

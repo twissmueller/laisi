@@ -1,8 +1,8 @@
 /**
  * Workflow State Scanner
  *
- * Scans the .laisi/ runtime directory to determine which steps
- * are done, failed, next, or pending.
+ * Scans a run directory to determine which steps are done, failed,
+ * next, or pending.
  */
 import { existsSync, readdirSync } from "node:fs";
 import type { WorkflowDefinition, StepDefinition } from "./workflow.js";
@@ -16,23 +16,34 @@ export interface StepState {
   status: StepStatus;
 }
 
+// ─── File Naming ───────────────────────────────────────────
+
+/** The file whose presence means this step succeeded. */
+export function stepOutputFile(step: StepDefinition): string {
+  return step.script ? `${step.id}.done` : `${step.id}.xml`;
+}
+
+/** The marker written when this step exhausted its retries. */
+export function stepFailedFile(step: StepDefinition): string {
+  return step.script ? `${step.id}.failed` : `${step.id}.xml.failed`;
+}
+
 // ─── Scanner ───────────────────────────────────────────────
 
 export function scanWorkflow(
-  laisiDir: string,
+  runDir: string,
   workflow: WorkflowDefinition,
 ): StepState[] {
-  const files = existsSync(laisiDir)
-    ? new Set(readdirSync(laisiDir))
+  const files = existsSync(runDir)
+    ? new Set(readdirSync(runDir))
     : new Set<string>();
 
   let foundNext = false;
   const states: StepState[] = [];
 
   for (const step of workflow.steps) {
-    const isScript = !!step.script;
-    const outputFile = isScript ? `${step.id}.done` : `${step.id}.xml`;
-    const failedFile = isScript ? `${step.id}.failed` : `${step.id}.xml.failed`;
+    const outputFile = stepOutputFile(step);
+    const failedFile = stepFailedFile(step);
 
     if (files.has(outputFile)) {
       states.push({ step, status: "done" });
@@ -56,4 +67,9 @@ export function scanWorkflow(
   }
 
   return states;
+}
+
+/** True once every step of the workflow has produced its output. */
+export function isWorkflowComplete(states: StepState[]): boolean {
+  return states.length > 0 && states.every((s) => s.status === "done");
 }
